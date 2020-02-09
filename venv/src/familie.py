@@ -7,6 +7,7 @@ from kivy.uix.boxlayout import BoxLayout
 global conn
 extras = {"urlaub", "fortbildung", "krank"}
 
+
 def num2Tag(d):
     if isinstance(d, str): d = int(d)
     return (datetime.date.today() + datetime.timedelta(days=d)).strftime("%d.%m.%y")
@@ -16,7 +17,6 @@ def num2WT(d):
     if isinstance(d, str): d = int(d)
     return (datetime.date.today() + datetime.timedelta(days=d)).strftime("%a")
 
-
 class Familie(BoxLayout):
     fnr = NumericProperty()
 
@@ -24,11 +24,19 @@ class Familie(BoxLayout):
         fnr = self.fnr
         tag = self.parent.parent.name
         tag = num2Tag((tag))
-        print("famEvent", x.text, "Feld", x.name, "Famnr", fnr, "Tag", tag)
+        # print("famEvent", x.text, "Feld", x.name, "Famnr", fnr, "Tag", tag)
+        x.normalize()
         try:
             with conn:
                 c = conn.cursor()
-                c.execute("UPDATE arbeitsblatt set " + x.name + " = ? where tag=? and fnr=?", (x.text, tag, fnr))
+                r1 = c.execute("UPDATE arbeitsblatt set " + x.name + " = ? where tag=? and fnr=?", (x.text, tag, fnr))
+                if r1.rowcount == 0:  # row did not yet exist
+                    vals = {"tag": tag, "fnr": fnr, "einsatzstelle": "", "beginn": "", "ende": "", "mvv_fahrt": "",
+                            "mvv_euro": ""}
+                    vals[x.name] = x.text
+                    r2 = c.execute(
+                        "INSERT INTO arbeitsblatt VALUES(:tag,:fnr,:einsatzstelle,:beginn,:ende,:mvv_fahrt,:mvv_euro)",
+                        vals)
         except Exception as e:
             print("ex1:", e)
 
@@ -41,7 +49,6 @@ class Familie(BoxLayout):
               self.ids.ende.text)
 
     def vorschlag1(self, t):
-        self.parent.vorschlagsTag = None
         t = int(t)
         tag = num2Tag(t)
         wt = num2WT(t)
@@ -98,6 +105,8 @@ class Familie(BoxLayout):
 
     def fillin(self, t, fnr):
         tag = num2Tag(t)
+        if fnr == 1:
+            self.parent.vorschlagsTag = None
         try:
             with conn:
                 c = conn.cursor()
@@ -106,13 +115,16 @@ class Familie(BoxLayout):
                     (tag, fnr))
                 r = c.fetchmany(2)
                 if len(r) == 0:
-                    vals = self.vorschlag1(t) if fnr == 1 else self.vorschlag23(t, fnr)
-                    c.execute("INSERT INTO arbeitsblatt VALUES(?,?,?,?,?,?,?)", vals)
+                    if int(t) < 2:
+                        vals = self.vorschlag1(t) if fnr == 1 else self.vorschlag23(t, fnr)
+                        if vals[2] != "" or vals[3] != "" or vals[4] != "" or vals[5] != "" or vals[6] != "":
+                            c.execute("INSERT INTO arbeitsblatt VALUES(?,?,?,?,?,?,?)", vals)
+                    else:
+                        vals = (tag, fnr, "", "", "", "", "")
                 elif len(r) == 1:
                     vals = (tag, fnr, *r[0])
                 else:
                     raise ValueError("mehr als ein Eintrag für Tag {}, Fnr {}".format(tag, fnr))
-                print("vals", vals)
                 self.ids.einsatzstelle.text = vals[2]
                 self.ids.beginn.text = vals[3]
                 self.ids.ende.text = vals[4]

@@ -77,10 +77,10 @@ Builder.load_string('''
     spacing: 1
     id: fam
     padding: '12dp'
-    MDTextField:
+    TextField:
         id: einsatzstelle
         name: "einsatzstelle"
-        hint_text: str(fam.fnr) + ". Einsatzstelle"
+        hint_text: str(fam.fnr) + ". Einsatzstelle/Pfl.-Nr./Urlaub/Krank/Fortbildung/Feiertag/Supervision/Sonstiges"
         helper_text: "Pfl.-Nr. oder Name"
         helper_text_mode: "on_focus"
         on_focus: if not self.focus: fam.famEvent(self)
@@ -102,7 +102,7 @@ Builder.load_string('''
             helper_text_mode: "on_focus"
             padding: '12dp'
             on_focus: if not self.focus: fam.famEvent(self)
-        MDTextField:
+        TextField:
             id: mvv_fahrt
             name: "mvv_fahrt"
             hint_text: "MVV-Fahrt"
@@ -110,7 +110,7 @@ Builder.load_string('''
             helper_text_mode: "on_focus"
             padding: '12dp'
             on_focus: if not self.focus: fam.famEvent(self)
-        MDTextField:
+        TextField:
             id: mvv_euro
             name: "mvv_euro"
             hint_text: "MVV-Euro"
@@ -139,16 +139,16 @@ Builder.load_string('''
         cols: 1
         spacing: 20
         padding: 30
-        MDTextField:
+        TextField:
             id: vorname
             hint_text: "Vorname"
-        MDTextField:
+        TextField:
             id: nachname
             hint_text: "Nachname"
-        MDTextField:
+        TextField:
             id: wochenstunden
             hint_text: "Wochenstunden"
-        MDTextField:
+        TextField:
             id: email_adresse
             hint_text: "Email-Adresse"
         MDRaisedButton:
@@ -195,14 +195,82 @@ class Tag(Screen):
             fam.printFam()
 
 
-
 class Menu(Screen):
     pass
 
 
 class TimeField(MDTextField):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.write_tab = False
 
+    def normalize(self):
+        t = self.text.strip()
+        col = t.find(':')
+        if col == 0:
+            t = "00" + t
+            col = 2
+        if col == 1:
+            t = "0" + t
+            col = 2
+        if col > 2:
+            t = t[0:2] + t[col:]
+            col = 2
+        if col == 2:
+            if len(t[2:]) == 1:
+                t = t + "00"
+            elif len(t[2:]) == 2:
+                t = t + "0"
+            else:
+                t = t[0:5]
+        col = t.find(',')
+        if col == 0:
+            t = "00" + t
+            col = 2
+        if col == 1:
+            t = "0" + t
+            col = 2
+        if (col > 2):
+            t = t[0:2] + t[col:]
+            col = 2
+        if col > 0:
+            t = t[0:2] + ":30"
+
+        if col == -1:
+            if len(t) == 1:
+                t = "0" + t + ":00"
+            elif len(t) == 2:
+                t = t + ":00"
+        if len(t) != 5 or t[2] != ":" or \
+                not "0" <= t[0] <= "9" or not "0" <= t[1] <= "9" or not "0" <= t[3] <= "9" or not "0" <= t[4] <= "9" or \
+                 int(t[0:2]) > 23 or int(t[3:5]) > 59:
+            t = ""
+        self.text = t
+
+
+class TextField(MDTextField):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.write_tab = False
+
+    gründe = ["Urlaub", "Krank", "Fortbildung", "Feiertag", "Supervision", "Sonstiges"]
+
+    def normalize(self):
+        t = self.text.strip()
+        if self.hint_text.find("Einsatz") > 0:
+            lc = t.lower()
+            lcLen = len(lc)
+            if lcLen >= 2:
+                for grund in self.gründe:
+                    if lcLen <= len(grund) and lc == grund[0:lcLen].lower():
+                        self.text = grund
+                        return
+        elif self.hint_text.find("MVV-Fahrt") >= 0:
+            if t != "" and t != "0,5":
+                self.text = ""
+                return
+        elif self.hint_text.find("MVV-Euro") >= 0:
+            pass
 
 class TestApp(MDApp):
     tage = {}
@@ -253,18 +321,10 @@ class TestApp(MDApp):
             t = self.tage[t]
             t.printTag()
 
-
     def appEvent(self, x):
         print("appEvent", x)
 
-
-if __name__ == '__main__':
-    locale.setlocale(locale.LC_TIME, "German")
-    conn = sqlite3.connect("test.db")
-    familie.conn = conn
-    app = TestApp()
-    app.conn = conn
-
+def initDB():
     c = conn.cursor()
     try:
         with conn:
@@ -279,5 +339,19 @@ if __name__ == '__main__':
         """)
     except OperationalError:
         pass
+    try:
+        with conn:
+            c.execute("""delete from arbeitsblatt where einsatzstelle="" and beginn="" and ende="" 
+                and mvv_fahrt="" and mvv_euro="" """)
+    except OperationalError:
+        pass
 
+
+if __name__ == '__main__':
+    locale.setlocale(locale.LC_TIME, "German")
+    conn = sqlite3.connect("test.db")
+    familie.conn = conn
+    app = TestApp()
+    app.conn = conn
+    initDB()
     app.run()
