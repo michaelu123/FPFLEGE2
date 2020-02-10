@@ -1,8 +1,9 @@
+import datetime
 import locale
 import sqlite3
-import datetime
 from sqlite3 import OperationalError
 
+import arbExcel
 import familie
 from kivy.clock import Clock
 from kivy.lang import Builder
@@ -10,7 +11,7 @@ from kivy.properties import ObjectProperty
 from kivy.uix.screenmanager import Screen, NoTransition, SlideTransition
 from kivy.uix.widget import Widget
 from kivymd.app import MDApp
-from kivymd.uix.dialog import MDDialog, MDInputDialog
+from kivymd.uix.dialog import MDDialog
 from kivymd.uix.textfield import MDTextField
 
 Builder.load_string('''
@@ -234,7 +235,7 @@ class Menu(Screen):
         try:
             with conn:
                 c = conn.cursor()
-                r1 = c.execute("UPDATE eigenschaften set " + x.name + " = ?", (x.text, ))
+                r1 = c.execute("UPDATE eigenschaften set " + x.name + " = ?", (x.text,))
                 if r1.rowcount == 0:  # row did not yet exist
                     vals = {"vorname": "", "nachname": "", "wochenstunden": "", "emailadresse": ""}
                     vals[x.name] = x.text
@@ -242,6 +243,7 @@ class Menu(Screen):
                         "INSERT INTO eigenschaften VALUES(:vorname,:nachname,:wochenstunden,:emailadresse)", vals)
         except Exception as e:
             print("ex1:", e)
+
 
 class TimeField(MDTextField):
     def __init__(self, *args, **kwargs):
@@ -327,7 +329,8 @@ class TextField(MDTextField):
                 t = str(ws)
             self.text = t
 
-class TestApp(MDApp):
+
+class ArbeitsBlatt(MDApp):
     tage = {}
     conn = ObjectProperty()
 
@@ -342,13 +345,16 @@ class TestApp(MDApp):
         self.root.sm.current = "Menu"
         self.root.sm.transition = SlideTransition()
 
-    def gotoScreen(self, t):
+    def gotoScreen(self, t, rel):
         sm = self.root.sm
-        n = int(sm.current) + t
-        if n > 5:
-            n = 5
-        if n < -45:
-            n = -45
+        if rel:
+            n = int(sm.current) + t
+            if n > 5:
+                n = 5
+            if n < -45:
+                n = -45
+        else:
+            n = t
         n = str(n)
         if n not in self.tage:
             self.tage[n] = Tag(name=n)
@@ -363,16 +369,16 @@ class TestApp(MDApp):
             sm.transition = SlideTransition()
         elif t < 0:
             sm.transition.direction = 'right'
-            self.gotoScreen(t)
+            self.gotoScreen(t, True)
         elif t == 0:
             sm.transition.direction = 'right' if int(sm.current) > 0 else 'left'
             sm.current = "0"
         else:
             sm.transition.direction = 'left'
-            self.gotoScreen(t)
+            self.gotoScreen(t, True)
 
     def senden(self, menu):
-        print(menu)
+        self.menu = menu
         self.mon = datetime.date.today()
         mon = self.mon.month
         d = 0
@@ -380,27 +386,30 @@ class TestApp(MDApp):
             d += 1
             self.mon = datetime.date.today() - datetime.timedelta(days=d)
         mon = self.mon.strftime("%B %Y")
-        x = MDDialog(size_hint=(.8, .4), title="Monatsauswahl", text="Arbeitsblatt senden vom " + mon + "?", text_button_cancel = "Cancel", text_button_ok = "OK", events_callback = self.evcb)
-        x.open()
+        dia = MDDialog(size_hint=(.8, .4), title="Monatsauswahl", text="Arbeitsblatt senden vom " + mon + "?",
+                       text_button_cancel="Cancel", text_button_ok="OK", events_callback=self.evcb)
+        dia.open()
 
     def evcb(self, x, y):
-        print("evcb", self, x, y)
+        # print("evcb", self, x, y)
         if x == "Cancel":
             mon = datetime.date.today()
             if mon == self.mon:
-                print("vorbei")
                 return
             self.mon = mon
             mon = mon.strftime("%B %Y")
-            x = MDDialog(size_hint=(.8, .4), title="Monatsauswahl", text="Arbeitsblatt senden vom " + mon + "?",
-                         text_button_cancel="Cancel", text_button_ok="OK", events_callback=self.evcb)
-            x.open()
+            dia = MDDialog(size_hint=(.8, .4), title="Monatsauswahl", text="Arbeitsblatt senden vom " + mon + "?",
+                           text_button_cancel="Cancel", text_button_ok="OK", events_callback=self.evcb)
+            dia.open()
         else:
             mon = self.mon.strftime("%m.%y")
             print("Senden:", mon)
+            excel = arbExcel.ArbExcel(mon, self)
+            excel.sende()
 
     def appEvent(self, x):
         print("appEvent", x)
+
 
 def initDB():
     c = conn.cursor()
@@ -437,9 +446,10 @@ def initDB():
 
 if __name__ == '__main__':
     locale.setlocale(locale.LC_TIME, "German")
-    conn = sqlite3.connect("test.db")
+    conn = sqlite3.connect("arbeitsblatt.db")
     familie.conn = conn
-    app = TestApp()
+    arbExcel.conn = conn
+    app = ArbeitsBlatt()
     app.conn = conn
     initDB()
     app.run()
