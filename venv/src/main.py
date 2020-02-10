@@ -1,5 +1,6 @@
 import locale
 import sqlite3
+import datetime
 from sqlite3 import OperationalError
 
 import familie
@@ -9,6 +10,7 @@ from kivy.properties import ObjectProperty
 from kivy.uix.screenmanager import Screen, NoTransition, SlideTransition
 from kivy.uix.widget import Widget
 from kivymd.app import MDApp
+from kivymd.uix.dialog import MDDialog, MDInputDialog
 from kivymd.uix.textfield import MDTextField
 
 Builder.load_string('''
@@ -135,27 +137,39 @@ Builder.load_string('''
             fnr: 3
             
 <Menu>:
+    on_kv_post: self.init()
+    id: menu
     GridLayout:
         cols: 1
         spacing: 20
         padding: 30
         TextField:
             id: vorname
+            name: "vorname"
             hint_text: "Vorname"
+            on_focus: if not self.focus: menu.menuEvent(self)
         TextField:
             id: nachname
+            name: "nachname"
             hint_text: "Nachname"
+            on_focus: if not self.focus: menu.menuEvent(self)
         TextField:
             id: wochenstunden
+            name: "wochenstunden"
             hint_text: "Wochenstunden"
+            helper_text: "10 bis 40"
+            helper_text_mode: "on_focus"
+            on_focus: if not self.focus: menu.menuEvent(self)
         TextField:
-            id: email_adresse
+            id: emailadresse
+            name: "emailadresse"
             hint_text: "Email-Adresse"
+            on_focus: if not self.focus: menu.menuEvent(self)
         MDRaisedButton:
             id: senden
             text: "Senden"
             on_release: 
-                app.senden()
+                app.senden(root)
             
 ''')
 
@@ -196,8 +210,38 @@ class Tag(Screen):
 
 
 class Menu(Screen):
-    pass
+    def init(self):
+        try:
+            with conn:
+                c = conn.cursor()
+                c.execute("SELECT vorname, nachname, wochenstunden, emailadresse from eigenschaften")
+                r = c.fetchmany(2)
+                if len(r) == 0:
+                    vals = ("", "", "", "")
+                elif len(r) == 1:
+                    vals = r[0]
+                else:
+                    raise ValueError("mehr als ein Eintrag für eigenschaften")
+                self.ids.vorname.text = vals[0]
+                self.ids.nachname.text = vals[1]
+                self.ids.wochenstunden.text = str(vals[2])
+                self.ids.emailadresse.text = vals[3]
+        except Exception as e:
+            print("ex4:", e)
 
+    def menuEvent(self, x):
+        x.normalize()
+        try:
+            with conn:
+                c = conn.cursor()
+                r1 = c.execute("UPDATE eigenschaften set " + x.name + " = ?", (x.text, ))
+                if r1.rowcount == 0:  # row did not yet exist
+                    vals = {"vorname": "", "nachname": "", "wochenstunden": "", "emailadresse": ""}
+                    vals[x.name] = x.text
+                    r2 = c.execute(
+                        "INSERT INTO eigenschaften VALUES(:vorname,:nachname,:wochenstunden,:emailadresse)", vals)
+        except Exception as e:
+            print("ex1:", e)
 
 class TimeField(MDTextField):
     def __init__(self, *args, **kwargs):
@@ -242,8 +286,8 @@ class TimeField(MDTextField):
             elif len(t) == 2:
                 t = t + ":00"
         if len(t) != 5 or t[2] != ":" or \
-                not "0" <= t[0] <= "9" or not "0" <= t[1] <= "9" or not "0" <= t[3] <= "9" or not "0" <= t[4] <= "9" or \
-                 int(t[0:2]) > 23 or int(t[3:5]) > 59:
+                not "0" <= t[0] <= "9" or not "0" <= t[1] <= "9" or not "0" <= t[3] <= "9" or not "0" <= t[4] <= "9" \
+                or int(t[0:2]) > 23 or int(t[3:5]) > 59:
             t = ""
         self.text = t
 
@@ -271,6 +315,17 @@ class TextField(MDTextField):
                 return
         elif self.hint_text.find("MVV-Euro") >= 0:
             pass
+        elif self.hint_text.find("Wochenstunden") >= 0:
+            ws = 0
+            try:
+                ws = int(t)
+            except:
+                pass
+            if ws < 10 or ws > 40:
+                t = ""
+            else:
+                t = str(ws)
+            self.text = t
 
 class TestApp(MDApp):
     tage = {}
@@ -292,8 +347,8 @@ class TestApp(MDApp):
         n = int(sm.current) + t
         if n > 5:
             n = 5
-        if n < -40:
-            n = -40
+        if n < -45:
+            n = -45
         n = str(n)
         if n not in self.tage:
             self.tage[n] = Tag(name=n)
@@ -316,10 +371,33 @@ class TestApp(MDApp):
             sm.transition.direction = 'left'
             self.gotoScreen(t)
 
-    def senden(self):
-        for t in self.tage:
-            t = self.tage[t]
-            t.printTag()
+    def senden(self, menu):
+        print(menu)
+        self.mon = datetime.date.today()
+        mon = self.mon.month
+        d = 0
+        while self.mon.month == mon:
+            d += 1
+            self.mon = datetime.date.today() - datetime.timedelta(days=d)
+        mon = self.mon.strftime("%B %Y")
+        x = MDDialog(size_hint=(.8, .4), title="Monatsauswahl", text="Arbeitsblatt senden vom " + mon + "?", text_button_cancel = "Cancel", text_button_ok = "OK", events_callback = self.evcb)
+        x.open()
+
+    def evcb(self, x, y):
+        print("evcb", self, x, y)
+        if x == "Cancel":
+            mon = datetime.date.today()
+            if mon == self.mon:
+                print("vorbei")
+                return
+            self.mon = mon
+            mon = mon.strftime("%B %Y")
+            x = MDDialog(size_hint=(.8, .4), title="Monatsauswahl", text="Arbeitsblatt senden vom " + mon + "?",
+                         text_button_cancel="Cancel", text_button_ok="OK", events_callback=self.evcb)
+            x.open()
+        else:
+            mon = self.mon.strftime("%m.%y")
+            print("Senden:", mon)
 
     def appEvent(self, x):
         print("appEvent", x)
@@ -336,7 +414,17 @@ def initDB():
             ende TEXT,
             mvv_fahrt TEXT,
             mvv_euro TEXT)
-        """)
+            """)
+    except OperationalError:
+        pass
+    try:
+        with conn:
+            c.execute("""CREATE TABLE eigenschaften(
+            vorname TEXT,
+            nachname TEXT,
+            wochenstunden INTEGER,
+            emailadresse TEXT)
+            """)
     except OperationalError:
         pass
     try:
