@@ -1,21 +1,9 @@
-import datetime
-from sqlite3 import OperationalError
+import utils
 
 from kivy.properties import NumericProperty
 from kivy.uix.boxlayout import BoxLayout
 
 global conn
-extras = {"urlaub", "fortbildung", "krank"}
-
-
-def num2Tag(d):
-    if isinstance(d, str): d = int(d)
-    return (datetime.date.today() + datetime.timedelta(days=d)).strftime("%d.%m.%y")
-
-
-def num2WT(d):
-    if isinstance(d, str): d = int(d)
-    return (datetime.date.today() + datetime.timedelta(days=d)).strftime("%a")
 
 class Familie(BoxLayout):
     fnr = NumericProperty()
@@ -23,7 +11,7 @@ class Familie(BoxLayout):
     def famEvent(self, x):
         fnr = self.fnr
         tag = self.parent.parent.name
-        tag = num2Tag((tag))
+        tag = utils.num2Tag((tag))
         # print("famEvent", x.text, "Feld", x.name, "Famnr", fnr, "Tag", tag)
         x.normalize()
         try:
@@ -31,11 +19,11 @@ class Familie(BoxLayout):
                 c = conn.cursor()
                 r1 = c.execute("UPDATE arbeitsblatt set " + x.name + " = ? where tag=? and fnr=?", (x.text, tag, fnr))
                 if r1.rowcount == 0:  # row did not yet exist
-                    vals = {"tag": tag, "fnr": fnr, "einsatzstelle": "", "beginn": "", "ende": "", "mvv_fahrt": "",
+                    vals = {"tag": tag, "fnr": fnr, "einsatzstelle": "", "beginn": "", "ende": "", "fahrtzeit": "",
                             "mvv_euro": ""}
                     vals[x.name] = x.text
                     r2 = c.execute(
-                        "INSERT INTO arbeitsblatt VALUES(:tag,:fnr,:einsatzstelle,:beginn,:ende,:mvv_fahrt,:mvv_euro)",
+                        "INSERT INTO arbeitsblatt VALUES(:tag,:fnr,:einsatzstelle,:beginn,:ende,:fahrtzeit,:mvv_euro)",
                         vals)
         except Exception as e:
             print("ex1:", e)
@@ -50,8 +38,8 @@ class Familie(BoxLayout):
 
     def vorschlag1(self, t):
         t = int(t)
-        tag = num2Tag(t)
-        wt = num2WT(t)
+        tag = utils.num2Tag(t)
+        wt = utils.num2WT(t)
         if wt == "Sa" or wt == "So":
             return (tag, 1, "", "", "", "", "")
         try:
@@ -59,18 +47,18 @@ class Familie(BoxLayout):
                 c = conn.cursor()
                 vals = None
                 for tv in range(t - 1, t - 5, -1):
-                    wt = num2WT(tv)
+                    wt = utils.num2WT(tv)
                     if wt == "Sa" or wt == "So":
                         continue
-                    tvtag = num2Tag(tv)
+                    tvtag = utils.num2Tag(tv)
                     c.execute(
-                        "SELECT einsatzstelle, beginn, ende, mvv_fahrt, mvv_euro from arbeitsblatt WHERE tag = ? and fnr = 1",
+                        "SELECT einsatzstelle, beginn, ende, fahrtzeit, mvv_euro from arbeitsblatt WHERE tag = ? and fnr = 1",
                         (tvtag,))
                     r = c.fetchmany(2)
                     if len(r) == 0:
                         break
                     elif len(r) == 1:
-                        if r[0][0].lower() not in extras:
+                        if r[0][0].lower() not in utils.extras:
                             vals = r[0]
                             self.parent.vorschlagsTag = tvtag
                             return (tag, 1, *vals)
@@ -78,12 +66,11 @@ class Familie(BoxLayout):
                         raise ValueError("mehr als ein Eintrag für Tag {}, Fnr 1".format(tag))
         except Exception as e:
             print("ex2:", e)
-        tag = num2Tag(t)
-        wt = num2WT(tv)
+        tag = utils.num2Tag(t)
         return (tag, 1, "", "", "", "", "")
 
     def vorschlag23(self, t, fnr):
-        tag = num2Tag(t)
+        tag = utils.num2Tag(t)
         tvtag = self.parent.vorschlagsTag
         if tvtag is None:
             return (tag, fnr, "", "", "", "", "")
@@ -91,7 +78,7 @@ class Familie(BoxLayout):
             with conn:
                 c = conn.cursor()
                 c.execute(
-                    "SELECT einsatzstelle, beginn, ende, mvv_fahrt, mvv_euro from arbeitsblatt WHERE tag = ? and fnr = ?",
+                    "SELECT einsatzstelle, beginn, ende, fahrtzeit, mvv_euro from arbeitsblatt WHERE tag = ? and fnr = ?",
                     (tvtag, fnr))
                 r = c.fetchmany(2)
                 if len(r) == 1:
@@ -104,14 +91,14 @@ class Familie(BoxLayout):
         return (tag, fnr, "", "", "", "", "")
 
     def fillin(self, t, fnr):
-        tag = num2Tag(t)
+        tag = utils.num2Tag(t)
         if fnr == 1:
             self.parent.vorschlagsTag = None
         try:
             with conn:
                 c = conn.cursor()
                 c.execute(
-                    "SELECT einsatzstelle, beginn, ende, mvv_fahrt, mvv_euro from arbeitsblatt WHERE tag = ? and fnr = ?",
+                    "SELECT einsatzstelle, beginn, ende, fahrtzeit, mvv_euro from arbeitsblatt WHERE tag = ? and fnr = ?",
                     (tag, fnr))
                 r = c.fetchmany(2)
                 if len(r) == 0:
@@ -128,7 +115,16 @@ class Familie(BoxLayout):
                 self.ids.einsatzstelle.text = vals[2]
                 self.ids.beginn.text = vals[3]
                 self.ids.ende.text = vals[4]
-                self.ids.mvv_fahrt.text = vals[5]
+                self.ids.fahrtzeit.text = vals[5]
                 self.ids.mvv_euro.text = vals[6]
         except Exception as e:
             print("ex4:", e)
+
+    def fillinStdBegEnd(self, wtag2Stunden):
+        tag = self.parent.parent.name
+        tag = utils.num2Tag((tag))
+        self.ids.beginn.text = utils.stdBeg(tag, wtag2Stunden)
+        self.famEvent(self.ids.beginn)
+        self.ids.ende.text = utils.stdEnd(tag, wtag2Stunden)
+        self.famEvent(self.ids.ende)
+        pass

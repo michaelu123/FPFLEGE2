@@ -5,6 +5,7 @@ from sqlite3 import OperationalError
 
 import arbExcel
 import familie
+import utils
 from kivy.clock import Clock
 from kivy.lang import Builder
 from kivy.properties import ObjectProperty
@@ -83,7 +84,7 @@ Builder.load_string('''
     TextField:
         id: einsatzstelle
         name: "einsatzstelle"
-        hint_text: str(fam.fnr) + ". Einsatzstelle/Pfl.-Nr./Urlaub/Krank/Fortbildung/Feiertag/Supervision/Sonstiges"
+        hint_text: str(fam.fnr) + ". Einsatzstelle/Pfl.-Nr./Urlaub/Krank/Feiertag/Fortbildung/Supervision/Sonstiges"
         helper_text: "Pfl.-Nr. oder Name"
         helper_text_mode: "on_focus"
         on_focus: if not self.focus: fam.famEvent(self)
@@ -106,9 +107,9 @@ Builder.load_string('''
             padding: '12dp'
             on_focus: if not self.focus: fam.famEvent(self)
         TextField:
-            id: mvv_fahrt
-            name: "mvv_fahrt"
-            hint_text: "MVV-Fahrt"
+            id: fahrtzeit
+            name: "fahrtzeit"
+            hint_text: "Fahrtzeit"
             helper_text: "0,5 oder leer"
             helper_text_mode: "on_focus"
             padding: '12dp'
@@ -158,7 +159,7 @@ Builder.load_string('''
             id: wochenstunden
             name: "wochenstunden"
             hint_text: "Wochenstunden"
-            helper_text: "10 bis 40"
+            helper_text: "20, 30, 35 oder 38,5"
             helper_text_mode: "on_focus"
             on_focus: if not self.focus: menu.menuEvent(self)
         TextField:
@@ -200,6 +201,8 @@ class Page(Widget):
 class Tag(Screen):
 
     def init(self):
+        if self.ids.fam1.ids.einsatzstelle.text != "":
+            return
         self.ids.fam1.fillin(self.name, 1)
         self.ids.fam2.fillin(self.name, 2)
         self.ids.fam3.fillin(self.name, 3)
@@ -225,8 +228,19 @@ class Menu(Screen):
                     raise ValueError("mehr als ein Eintrag für eigenschaften")
                 self.ids.vorname.text = vals[0]
                 self.ids.nachname.text = vals[1]
-                self.ids.wochenstunden.text = str(vals[2])
+                wochenstunden = vals[2]
+                self.ids.wochenstunden.text = vals[2]
                 self.ids.emailadresse.text = vals[3]
+                if wochenstunden == "20":
+                    self.wtag2Stunden = ("04:00", "04:00", "04:00", "04:00", "04:00", "00:00", "00:00")
+                elif wochenstunden == "30":
+                    self.wtag2Stunden = ("06:00", "06:00", "06:00", "06:00", "06:00", "00:00", "00:00")
+                elif wochenstunden == "35":
+                    self.wtag2Stunden = ("07:00", "07:00", "07:00", "07:00", "07:00", "00:00", "00:00")
+                elif wochenstunden == "38,5":
+                    self.wtag2Stunden = ("08:00", "08:00", "08:00", "08:00", "06:30", "00:00", "00:00")
+                else:
+                    self.wtag2Stunden = ("", "", "", "", "", "", "")
         except Exception as e:
             print("ex4:", e)
 
@@ -299,7 +313,7 @@ class TextField(MDTextField):
         super().__init__(*args, **kwargs)
         self.write_tab = False
 
-    gründe = ["Urlaub", "Krank", "Fortbildung", "Feiertag", "Supervision", "Sonstiges"]
+    gründe = ["Urlaub", "Krank", "Feiertag", "Fortbildung", "Supervision", "Sonstiges"]
 
     def normalize(self):
         t = self.text.strip()
@@ -309,24 +323,19 @@ class TextField(MDTextField):
             if lcLen >= 2:
                 for grund in self.gründe:
                     if lcLen <= len(grund) and lc == grund[0:lcLen].lower():
-                        self.text = grund
-                        return
-        elif self.hint_text.find("MVV-Fahrt") >= 0:
+                        self.text = t = grund
+                        break
+            if t.lower() in utils.extras:
+                self.parent.fillinStdBegEnd(app.menu.wtag2Stunden)
+        elif self.hint_text.find("Fahrtzeit") >= 0:
             if t != "" and t != "0,5":
                 self.text = ""
                 return
         elif self.hint_text.find("MVV-Euro") >= 0:
             pass
         elif self.hint_text.find("Wochenstunden") >= 0:
-            ws = 0
-            try:
-                ws = int(t)
-            except:
-                pass
-            if ws < 10 or ws > 40:
+            if t != "20" and t != "30" and t != "35" and t != "38,5":
                 t = ""
-            else:
-                t = str(ws)
             self.text = t
 
 
@@ -336,7 +345,8 @@ class ArbeitsBlatt(MDApp):
 
     def build(self):
         self.root = Page()
-        self.root.sm.add_widget(Menu(name="Menu"))
+        self.menu = Menu(name="Menu")
+        self.root.sm.add_widget(self.menu)
         self.tage["0"] = self.root.sm.current_screen
         return self.root
 
@@ -351,12 +361,14 @@ class ArbeitsBlatt(MDApp):
             n = int(sm.current) + t
             if n > 5:
                 n = 5
-            if n < -45:
-                n = -45
+            if n < -62:
+                n = -62
         else:
             n = t
         n = str(n)
-        if n not in self.tage:
+        if n in self.tage:
+            self.tage[n].init()
+        else:
             self.tage[n] = Tag(name=n)
             sm.add_widget(self.tage[n])
         sm.current = n
@@ -403,7 +415,7 @@ class ArbeitsBlatt(MDApp):
             dia.open()
         else:
             mon = self.mon.strftime("%m.%y")
-            print("Senden:", mon)
+            # print("Senden:", mon)
             excel = arbExcel.ArbExcel(mon, self)
             excel.sende()
 
@@ -421,7 +433,7 @@ def initDB():
             einsatzstelle TEXT,
             beginn TEXT,
             ende TEXT,
-            mvv_fahrt TEXT,
+            fahrtzeit TEXT,
             mvv_euro TEXT)
             """)
     except OperationalError:
@@ -431,7 +443,7 @@ def initDB():
             c.execute("""CREATE TABLE eigenschaften(
             vorname TEXT,
             nachname TEXT,
-            wochenstunden INTEGER,
+            wochenstunden TEXT,
             emailadresse TEXT)
             """)
     except OperationalError:
@@ -439,7 +451,7 @@ def initDB():
     try:
         with conn:
             c.execute("""delete from arbeitsblatt where einsatzstelle="" and beginn="" and ende="" 
-                and mvv_fahrt="" and mvv_euro="" """)
+                and fahrtzeit="" and mvv_euro="" """)
     except OperationalError:
         pass
 
