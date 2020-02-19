@@ -18,7 +18,7 @@ Beginn3 = 10
 Ende3 = 11
 Arbeitsstunden = 12
 Ueberstunden = 13
-Unterstunden = 14
+Kumuliert = 14
 Sentinel = 15
 
 class ArbExcel:
@@ -58,7 +58,8 @@ class ArbExcel:
             wday = utils.day2WT(self.tag)
             if wday == "Sa" or wday == "So":
                 continue
-            if (row[2] != "" or row[3] != "" or row[4] != "") and (row[2] == "" or row[3] == "" or row[4] == ""):
+            # if (row[2] != "" or row[3] != "" or row[4] != "") and (row[2] == "" or row[3] == "" or row[4] == ""):
+            if row[2] == "" or row[3] == "" or row[4] == "":
                 dia = MDDialog(size_hint=(.8, .4), title="Daten unvollständig",
                                text="Bitte Daten von " + wday + ", " + self.tag  + " vervollständigen",
                                text_button_ok="OK", events_callback=self.evcb)
@@ -75,22 +76,32 @@ class ArbExcel:
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = self.month
-        wstunden = int(self.app.menu.ids.wochenstunden.text)
+        wstunden = self.app.menu.ids.wochenstunden.text
         ws.append(
             ["Tag", "1.Einsatzstelle", "Beginn", "Ende", "Fahrt", "MVV-Euro", "2.Einsatzstelle", "Beginn", "Ende1",
-             "3.Einsatzstelle", "Beginn", "Ende", "Arbeitsstunden", "Überstunden"])
+             "3.Einsatzstelle", "Beginn", "Ende", "Arbeitsstunden", "Überstunden", "Kumuliert"])
         ctag = ""
         er = None
         sums = {}
         dsum = "00:00"
+        kumSoll = "00:00"
+        kumUeber = "00:00"
         fsum = "00:00"
         for row in rows:
             tag = row[0]
             if tag != ctag:
                 if ctag != "":
+                    er[Arbeitsstunden] = dsum
+                    ueberstunden = utils.tsub(dsum, sollStunden)
+                    er[Ueberstunden] = ueberstunden
+                    kumSoll = utils.tadd(kumSoll, sollStunden)
+                    kumUeber = utils.tadd(kumUeber, ueberstunden)
+                    er[Kumuliert] = kumUeber
                     ws.append(er)
                 er = ["" for x in range(Sentinel)]
-                er[Tag] = tag
+                wday = utils.day2WT(tag)
+                sollStunden = self.app.menu.wtag2Stunden[utils.wday2No[wday]]
+                er[Tag] = wday + ", " + tag
                 ctag = tag
                 dsum = "00:00"
             if row[1] == 1:
@@ -113,18 +124,31 @@ class ArbExcel:
             else:
                 raise ValueError("Tag " + tag + " hat fnr " + row[1])
             utils.radd(sums, row)
-            dsum = utils.tadd(dsum, utils.tsub(row[4], row[3]))
-            er[Arbeitsstunden] = dsum
+            if row[2].lower() != "üst-abbau":
+                dsum = utils.tadd(dsum, utils.tsubPause(row[4], row[3]))
+        ueberstunden = utils.tsub(dsum, sollStunden)
+        er[Arbeitsstunden] = dsum
+        er[Ueberstunden] = ueberstunden
+        kumSoll = utils.tadd(kumSoll, sollStunden)
+        kumUeber = utils.tadd(kumUeber, ueberstunden)
+        er[Kumuliert] = kumUeber
+        ws.append(er)
 
         ws.append([])
         ws.append([])
         tsum = "00:00"
         ws.append(["Einsatzstelle", "Stunden"])
-        for es in sums.keys():
-            ws.append((es, sums[es]))
-            tsum = utils.tadd(tsum, sums[es])
-        ws.append(("Fahrzeit", fsum))
-        ws.append(("Summe", tsum))
+        sums["Fahrzeit"] = fsum
+        for es in sorted(sums.keys()):
+            if es == "Üst-Abbau":
+                continue
+            else:
+                ws.append((es, sums[es]))
+                tsum = utils.tadd(tsum, sums[es])
+        ws.append([])
+        ws.append(("Arbeitsstunden", tsum))
+        ws.append(("Sollstunden", kumSoll))
+        ws.append(("Überstunden", kumUeber))
 
         wb.save("arb.xlsx")
         pass

@@ -84,7 +84,7 @@ Builder.load_string('''
     TextField:
         id: einsatzstelle
         name: "einsatzstelle"
-        hint_text: str(fam.fnr) + ". Einsatzstelle/Pfl.-Nr./Urlaub/Krank/Feiertag/Fortbildung/Supervision/Sonstiges"
+        hint_text: str(fam.fnr) + ". Einsatzstelle/Pfl.-Nr./Urlaub/Krank/Feiertag/Üst-Abbau/Fortbildung/Supervision/Sonstiges"
         helper_text: "Pfl.-Nr. oder Name"
         helper_text_mode: "on_focus"
         on_focus: if not self.focus: fam.famEvent(self)
@@ -171,7 +171,7 @@ Builder.load_string('''
             id: senden
             text: "Senden"
             on_release: 
-                app.senden(root)
+                app.senden()
             
 ''')
 
@@ -313,7 +313,7 @@ class TextField(MDTextField):
         super().__init__(*args, **kwargs)
         self.write_tab = False
 
-    gründe = ["Urlaub", "Krank", "Feiertag", "Fortbildung", "Supervision", "Sonstiges"]
+    gründe = ["Urlaub", "Krank", "Feiertag", "Üst-Abbau", "Fortbildung", "Supervision", "Sonstiges"]
 
     def normalize(self):
         t = self.text.strip()
@@ -389,8 +389,7 @@ class ArbeitsBlatt(MDApp):
             sm.transition.direction = 'left'
             self.gotoScreen(t, True)
 
-    def senden(self, menu):
-        self.menu = menu
+    def senden(self):
         self.mon = datetime.date.today()
         mon = self.mon.month
         d = 0

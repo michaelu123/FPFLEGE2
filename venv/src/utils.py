@@ -1,6 +1,6 @@
 import datetime
 
-extras = {"urlaub", "feiertag", "krank"}
+extras = {"urlaub", "feiertag", "krank", "üst-abbau"}
 wday2No = {"Mo": 0, "Di": 1, "Mi": 2, "Do": 3, "Fr": 4, "Sa": 5, "So": 6}
 
 
@@ -48,19 +48,41 @@ def day2WT(tag):  # d = 24.12.19
     return wday
 
 
+def t2m(t):
+    sign = 1
+    if t[0] == "-":
+        sign = -1
+        t = t[1:]
+    col = t.find(':')
+    m = int(t[0:col]) * 60 + int(t[col+1:])
+    return sign * m
+
+
 def tadd(t1, t2):
     # 03:20 + 02:50 = 06:10
-    colt1 = t1.find(':')
-    colt2 = t2.find(':')
-    m3 = int(t1[colt1+1:]) + int(t2[colt2+1:])
-    h3 = int(t1[0:colt1]) + int(t2[0:colt2])
-    while m3 >= 60:
-        h3 += 1
-        m3 -= 60
-    return '{:02d}:{:02d}'.format(h3, m3)
+    m1 = t2m(t1)
+    m2 = t2m(t2)
+    m = m1 + m2
+    sign = ""
+    if m < 0:
+        m = -m
+        sign = "-"
+    return sign + '{:02d}:{:02d}'.format(int(m / 60), int(m % 60))
 
 
 def tsub(t1, t2):
+    m1 = t2m(t1)
+    m2 = t2m(t2)
+    m = m1 - m2
+    if m < 0:
+        sign = "-"
+        m = -m
+    else:
+        sign = ""
+    return sign + '{:02d}:{:02d}'.format(int(m / 60), int(m % 60))
+
+
+def tsubPause(t1, t2):
     # 06:10 - 03:20 = 02:50
     m3 = int(t1[3:5]) - int(t2[3:5])
     h3 = int(t1[0:2]) - int(t2[0:2])
@@ -77,7 +99,7 @@ def tsub(t1, t2):
 
 def radd(sums, row):
     es = row[2]
-    t = tsub(row[4], row[3])
+    t = tsubPause(row[4], row[3])
     try:
         sums[es] = tadd(sums[es], t)
     except:
