@@ -2,10 +2,10 @@ import datetime
 import locale
 import sqlite3
 from sqlite3 import OperationalError
+import os
 
 import arbExcel
 import familie
-import utils
 from kivy.clock import Clock
 from kivy.lang import Builder
 from kivy.properties import ObjectProperty
@@ -181,6 +181,9 @@ class Page(Widget):
     t = 0
     ev = None
 
+    def __del__(self):
+        print("Page del")
+
     def on_touch_move(self, touch):
         # print("touch", touch)
         self.t = touch.x - touch.ox
@@ -199,13 +202,15 @@ class Page(Widget):
 
 
 class Tag(Screen):
+    def __del__(self):
+        print("Tag del")
 
     def init(self):
         if self.ids.fam1.ids.einsatzstelle.text != "":
             return
-        self.ids.fam1.fillin(self.name, 1)
-        self.ids.fam2.fillin(self.name, 2)
-        self.ids.fam3.fillin(self.name, 3)
+        self.ids.fam1.fillin(self.name, 1, app)
+        self.ids.fam2.fillin(self.name, 2, app)
+        self.ids.fam3.fillin(self.name, 3, app)
 
     def printTag(self):
         for f in ["fam1", "fam2", "fam3"]:
@@ -214,6 +219,9 @@ class Tag(Screen):
 
 
 class Menu(Screen):
+    def __del__(self):
+        print("Menu del")
+
     def init(self):
         try:
             with conn:
@@ -260,8 +268,11 @@ class Menu(Screen):
 
 
 class TimeField(MDTextField):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __del__(self):
+        print("Tim del")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.write_tab = False
 
     def normalize(self):
@@ -290,7 +301,7 @@ class TimeField(MDTextField):
         if col == 1:
             t = "0" + t
             col = 2
-        if (col > 2):
+        if col > 2:
             t = t[0:2] + t[col:]
             col = 2
         if col > 0:
@@ -309,8 +320,11 @@ class TimeField(MDTextField):
 
 
 class TextField(MDTextField):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __del__(self):
+        print("Tex del")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.write_tab = False
 
     gründe = ["Urlaub", "Krank", "Feiertag", "Üst-Abbau", "Fortbildung", "Supervision", "Sonstiges"]
@@ -325,7 +339,7 @@ class TextField(MDTextField):
                     if lcLen <= len(grund) and lc == grund[0:lcLen].lower():
                         self.text = t = grund
                         break
-            if t.lower() in utils.extras:
+            if self.parent.fnr == 1:  # and t.lower() in utils.extras:
                 self.parent.fillinStdBegEnd(app.menu.wtag2Stunden)
         elif self.hint_text.find("Fahrtzeit") >= 0:
             if t != "" and t != "0,5":
@@ -398,28 +412,29 @@ class ArbeitsBlatt(MDApp):
             self.mon = datetime.date.today() - datetime.timedelta(days=d)
         mon = self.mon.strftime("%B %Y")
         dia = MDDialog(size_hint=(.8, .4), title="Monatsauswahl", text="Arbeitsblatt senden vom " + mon + "?",
-                       text_button_cancel="Cancel", text_button_ok="OK", events_callback=self.evcb)
+                       text_button_cancel="Nein", text_button_ok="Ja", events_callback=self.evcb)
         dia.open()
 
-    def evcb(self, x, y):
+    def evcb(self, x, _y):
         # print("evcb", self, x, y)
-        if x == "Cancel":
+        if x == "Nein":
             mon = datetime.date.today()
             if mon == self.mon:
                 return
             self.mon = mon
             mon = mon.strftime("%B %Y")
             dia = MDDialog(size_hint=(.8, .4), title="Monatsauswahl", text="Arbeitsblatt senden vom " + mon + "?",
-                           text_button_cancel="Cancel", text_button_ok="OK", events_callback=self.evcb)
+                           text_button_cancel="Nein", text_button_ok="Ja", events_callback=self.evcb)
             dia.open()
         else:
             mon = self.mon.strftime("%m.%y")
             # print("Senden:", mon)
             excel = arbExcel.ArbExcel(mon, self)
             excel.sende()
-
-    def appEvent(self, x):
-        print("appEvent", x)
+            if os.name == 'nt':
+                pass
+            else:
+                print("osname", os.name)
 
 
 def initDB():

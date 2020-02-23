@@ -5,13 +5,14 @@ from kivy.uix.boxlayout import BoxLayout
 
 global conn
 
+
 class Familie(BoxLayout):
     fnr = NumericProperty()
 
     def famEvent(self, x):
         fnr = self.fnr
         tag = self.parent.parent.name
-        tag = utils.num2Tag((tag))
+        tag = utils.num2Tag(tag)
         # print("famEvent", x.text, "Feld", x.name, "Famnr", fnr, "Tag", tag)
         x.normalize()
         try:
@@ -22,7 +23,7 @@ class Familie(BoxLayout):
                     vals = {"tag": tag, "fnr": fnr, "einsatzstelle": "", "beginn": "", "ende": "", "fahrtzeit": "",
                             "mvv_euro": ""}
                     vals[x.name] = x.text
-                    r2 = c.execute(
+                    c.execute(
                         "INSERT INTO arbeitsblatt VALUES(:tag,:fnr,:einsatzstelle,:beginn,:ende,:fahrtzeit,:mvv_euro)",
                         vals)
         except Exception as e:
@@ -45,21 +46,25 @@ class Familie(BoxLayout):
         try:
             with conn:
                 c = conn.cursor()
-                vals = None
                 for tv in range(t - 1, t - 5, -1):
-                    wt = utils.num2WT(tv)
-                    if wt == "Sa" or wt == "So":
+                    wtv = utils.num2WT(tv)
+                    if wtv == "Sa" or wtv == "So":
                         continue
                     tvtag = utils.num2Tag(tv)
-                    c.execute(
-                        "SELECT einsatzstelle, beginn, ende, fahrtzeit, mvv_euro from arbeitsblatt WHERE tag = ? and fnr = 1",
-                        (tvtag,))
+                    c.execute("SELECT einsatzstelle, beginn, ende, fahrtzeit, mvv_euro"
+                              " from arbeitsblatt WHERE tag = ? and fnr = 1",
+                              (tvtag,))
                     r = c.fetchmany(2)
                     if len(r) == 0:
                         break
                     elif len(r) == 1:
-                        if r[0][0].lower() not in utils.extras:
+                        if r[0][0].lower() not in utils.skipES:
                             vals = r[0]
+                            if self.app.menu.ids.wochenstunden.text == "38,5": # übertrieben?
+                                if wt == "Fr":
+                                    vals = (vals[0], "08:00", "15:00", vals[3], vals[4])
+                                elif wtv == "Fr":
+                                    vals = (vals[0], "08:00", "16:30", vals[3], vals[4])
                             self.parent.vorschlagsTag = tvtag
                             return (tag, 1, *vals)
                     else:
@@ -77,9 +82,9 @@ class Familie(BoxLayout):
         try:
             with conn:
                 c = conn.cursor()
-                c.execute(
-                    "SELECT einsatzstelle, beginn, ende, fahrtzeit, mvv_euro from arbeitsblatt WHERE tag = ? and fnr = ?",
-                    (tvtag, fnr))
+                c.execute("SELECT einsatzstelle, beginn, ende, fahrtzeit, mvv_euro"
+                          " from arbeitsblatt WHERE tag = ? and fnr = ?",
+                          (tvtag, fnr))
                 r = c.fetchmany(2)
                 if len(r) == 1:
                     vals = r[0]
@@ -90,16 +95,17 @@ class Familie(BoxLayout):
             print("ex3:", e)
         return (tag, fnr, "", "", "", "", "")
 
-    def fillin(self, t, fnr):
+    def fillin(self, t, fnr, app):
+        self.app = app
         tag = utils.num2Tag(t)
         if fnr == 1:
             self.parent.vorschlagsTag = None
         try:
             with conn:
                 c = conn.cursor()
-                c.execute(
-                    "SELECT einsatzstelle, beginn, ende, fahrtzeit, mvv_euro from arbeitsblatt WHERE tag = ? and fnr = ?",
-                    (tag, fnr))
+                c.execute("SELECT einsatzstelle, beginn, ende, fahrtzeit, mvv_euro"
+                          " from arbeitsblatt WHERE tag = ? and fnr = ?",
+                          (tag, fnr))
                 r = c.fetchmany(2)
                 if len(r) == 0:
                     if int(t) < 2:
@@ -121,8 +127,10 @@ class Familie(BoxLayout):
             print("ex4:", e)
 
     def fillinStdBegEnd(self, wtag2Stunden):
+        if self.ids.beginn.text != "" or self.ids.ende.text != "":
+            return
         tag = self.parent.parent.name
-        tag = utils.num2Tag((tag))
+        tag = utils.num2Tag(tag)
         self.ids.beginn.text = utils.stdBeg(tag, wtag2Stunden)
         self.famEvent(self.ids.beginn)
         self.ids.ende.text = utils.stdEnd(tag, wtag2Stunden)

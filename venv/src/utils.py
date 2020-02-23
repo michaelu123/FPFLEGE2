@@ -1,10 +1,13 @@
 import datetime
 
-extras = {"urlaub", "feiertag", "krank", "üst-abbau"}
+# Termine, bei denen die Arbeitszeit und SollZeit 0 ist
+nichtArb = ["urlaub", "krank", "feiertag", "üst-abbau"]
+# einige Termine, von denen wir annehmen, daß sie sich nicht am nächsten Tag wiederholen:
+skipES = ["krank", "feiertag", "üst-abbau", "fortbildung", "supervision", "dienstbesprechung"]
 wday2No = {"Mo": 0, "Di": 1, "Mi": 2, "Do": 3, "Fr": 4, "Sa": 5, "So": 6}
 
 
-def stdBeg(tag, wtag2Stunden):
+def stdBeg(_tag, _wtag2Stunden):
     return "08:00"
 
 
@@ -21,6 +24,7 @@ def stdEnd(tag, wtag2Stunden):
     if stunden == "08:00":
         return "16:30"
     return ""
+
 
 def num2Tag(d):
     if isinstance(d, str):
@@ -54,7 +58,7 @@ def t2m(t):
         sign = -1
         t = t[1:]
     col = t.find(':')
-    m = int(t[0:col]) * 60 + int(t[col+1:])
+    m = int(t[0:col]) * 60 + int(t[col + 1:])
     return sign * m
 
 
@@ -97,10 +101,16 @@ def tsubPause(t1, t2):
     return '{:02d}:{:02d}'.format(h3, m3)
 
 
-def radd(sums, row):
+def hadd(sumh, row):
     es = row[2]
     t = tsubPause(row[4], row[3])
     try:
-        sums[es] = tadd(sums[es], t)
+        sumh[es] = tadd(sumh[es], t)
     except:
-        sums[es] = t
+        sumh[es] = t
+
+def dadd(sumd, es):
+    try:
+        sumd[es] = sumd[es] + 1
+    except:
+        sumd[es] = 1
