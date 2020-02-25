@@ -6,6 +6,7 @@ import os
 
 import arbExcel
 import familie
+import utils
 from kivy.clock import Clock
 from kivy.lang import Builder
 from kivy.properties import ObjectProperty
@@ -84,7 +85,7 @@ Builder.load_string('''
     TextField:
         id: einsatzstelle
         name: "einsatzstelle"
-        hint_text: str(fam.fnr) + ". Einsatzstelle/Pfl.-Nr./Urlaub/Krank/Feiertag/Üst-Abbau/Fortbildung/Supervision/Sonstiges"
+        hint_text: str(fam.fnr) + ". Einsatzstelle/Pfl.-Nr./Urlaub/Krank/Feiertag/Üst-Abbau/Fortbildung/Supervision/Dienstbesprechung/Sonstiges"
         helper_text: "Pfl.-Nr. oder Name"
         helper_text_mode: "on_focus"
         on_focus: if not self.focus: fam.famEvent(self)
@@ -228,6 +229,7 @@ class Menu(Screen):
                 c = conn.cursor()
                 c.execute("SELECT vorname, nachname, wochenstunden, emailadresse from eigenschaften")
                 r = c.fetchmany(2)
+                r = utils.elimEmpty(r, 1)
                 if len(r) == 0:
                     vals = ("", "", "", "")
                 elif len(r) == 1:
@@ -250,7 +252,7 @@ class Menu(Screen):
                 else:
                     self.wtag2Stunden = ("", "", "", "", "", "", "")
         except Exception as e:
-            print("ex4:", e)
+            utils.printEx("main0:", e)
 
     def menuEvent(self, x):
         x.normalize()
@@ -264,7 +266,7 @@ class Menu(Screen):
                     r2 = c.execute(
                         "INSERT INTO eigenschaften VALUES(:vorname,:nachname,:wochenstunden,:emailadresse)", vals)
         except Exception as e:
-            print("ex1:", e)
+            utils.printEx("main1:", e)
 
 
 class TimeField(MDTextField):
@@ -327,7 +329,7 @@ class TextField(MDTextField):
         super().__init__(**kwargs)
         self.write_tab = False
 
-    gründe = ["Urlaub", "Krank", "Feiertag", "Üst-Abbau", "Fortbildung", "Supervision", "Sonstiges"]
+    gründe = ["Urlaub", "Krank", "Feiertag", "Üst-Abbau", "Fortbildung", "Supervision", "Dienstbesprechung", "Sonstiges"]
 
     def normalize(self):
         t = self.text.strip()
@@ -337,7 +339,7 @@ class TextField(MDTextField):
             if lcLen >= 2:
                 for grund in self.gründe:
                     if lcLen <= len(grund) and lc == grund[0:lcLen].lower():
-                        self.text = t = grund
+                        self.text = grund
                         break
             if self.parent.fnr == 1:  # and t.lower() in utils.extras:
                 self.parent.fillinStdBegEnd(app.menu.wtag2Stunden)
@@ -358,8 +360,8 @@ class ArbeitsBlatt(MDApp):
     conn = ObjectProperty()
 
     def build(self):
-        self.root = Page()
         self.menu = Menu(name="Menu")
+        self.root = Page()
         self.root.sm.add_widget(self.menu)
         self.tage["0"] = self.root.sm.current_screen
         return self.root
@@ -464,8 +466,7 @@ def initDB():
         pass
     try:
         with conn:
-            c.execute("""delete from arbeitsblatt where einsatzstelle="" and beginn="" and ende="" 
-                and fahrtzeit="" and mvv_euro="" """)
+            c.execute("""delete from arbeitsblatt where einsatzstelle="" and beginn="" and ende="" """)
     except OperationalError:
         pass
 

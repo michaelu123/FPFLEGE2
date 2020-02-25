@@ -27,7 +27,7 @@ class Familie(BoxLayout):
                         "INSERT INTO arbeitsblatt VALUES(:tag,:fnr,:einsatzstelle,:beginn,:ende,:fahrtzeit,:mvv_euro)",
                         vals)
         except Exception as e:
-            print("ex1:", e)
+            utils.printEx("fam0:", e)
 
     def printFam(self):
         # print("fam", self)
@@ -55,6 +55,7 @@ class Familie(BoxLayout):
                               " from arbeitsblatt WHERE tag = ? and fnr = 1",
                               (tvtag,))
                     r = c.fetchmany(2)
+                    r = utils.elimEmpty(r,0)
                     if len(r) == 0:
                         break
                     elif len(r) == 1:
@@ -70,7 +71,7 @@ class Familie(BoxLayout):
                     else:
                         raise ValueError("mehr als ein Eintrag für Tag {}, Fnr 1".format(tag))
         except Exception as e:
-            print("ex2:", e)
+            utils.printEx("fam1:", e)
         tag = utils.num2Tag(t)
         return (tag, 1, "", "", "", "", "")
 
@@ -86,13 +87,14 @@ class Familie(BoxLayout):
                           " from arbeitsblatt WHERE tag = ? and fnr = ?",
                           (tvtag, fnr))
                 r = c.fetchmany(2)
+                r = utils.elimEmpty(r,0)
                 if len(r) == 1:
                     vals = r[0]
                     return (tag, fnr, *vals)
                 elif len(r) > 1:
                     raise ValueError("mehr als ein Eintrag für Tag {}, Fnr {}".format(tag, fnr))
         except Exception as e:
-            print("ex3:", e)
+            utils.printEx("fam2:", e)
         return (tag, fnr, "", "", "", "", "")
 
     def fillin(self, t, fnr, app):
@@ -107,6 +109,7 @@ class Familie(BoxLayout):
                           " from arbeitsblatt WHERE tag = ? and fnr = ?",
                           (tag, fnr))
                 r = c.fetchmany(2)
+                r = utils.elimEmpty(r,0)
                 if len(r) == 0:
                     if int(t) < 2:
                         vals = self.vorschlag1(t) if fnr == 1 else self.vorschlag23(t, fnr)
@@ -124,7 +127,7 @@ class Familie(BoxLayout):
                 self.ids.fahrtzeit.text = vals[5]
                 self.ids.mvv_euro.text = vals[6]
         except Exception as e:
-            print("ex4:", e)
+            utils.printEx("fam3:", e)
 
     def fillinStdBegEnd(self, wtag2Stunden):
         if self.ids.beginn.text != "" or self.ids.ende.text != "":

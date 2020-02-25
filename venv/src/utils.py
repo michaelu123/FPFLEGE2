@@ -1,6 +1,9 @@
 import datetime
 
 # Termine, bei denen die Arbeitszeit und SollZeit 0 ist
+import sys
+import traceback
+
 nichtArb = ["urlaub", "krank", "feiertag", "üst-abbau"]
 # einige Termine, von denen wir annehmen, daß sie sich nicht am nächsten Tag wiederholen:
 skipES = ["krank", "feiertag", "üst-abbau", "fortbildung", "supervision", "dienstbesprechung"]
@@ -93,7 +96,7 @@ def tsubPause(t1, t2):
     while m3 < 0:
         h3 -= 1
         m3 += 60
-    if h3 >= 6:
+    if h3 > 6 or h3 == 6 and m3 > 0: # h3:m3 > 06:00
         m3 -= 30
         while m3 < 0:
             h3 -= 1
@@ -114,3 +117,16 @@ def dadd(sumd, es):
         sumd[es] = sumd[es] + 1
     except:
         sumd[es] = 1
+
+
+def elimEmpty(tuples, x):
+    res = []
+    for t in tuples:
+        if t[x] != "":
+            res.append(t)
+    return res
+
+
+def printEx(msg, e):
+    print(msg, e)
+    traceback.print_exc(file=sys.stdout)

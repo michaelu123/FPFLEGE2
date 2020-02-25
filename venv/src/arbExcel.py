@@ -47,11 +47,12 @@ class ArbExcel:
                           ("__." + self.month,))
                 while True:
                     r = c.fetchmany(100)
+                    r = utils.elimEmpty(r,2)
                     if len(r) == 0:
                         break
                     rows.extend(r)
         except Exception as e:
-            print("arbex2:", e)
+            utils.printEx("arbex0:", e)
 
         rows.sort(key=lambda xr: xr[0] + str(xr[1]))  # sort by tag and fnr, i.e. 01.01.20, 02.01.20,...,31.01.20
         lastTnr = 0
