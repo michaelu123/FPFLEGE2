@@ -1,8 +1,11 @@
 import datetime
+import functools
 import locale
-import sqlite3
-from sqlite3 import OperationalError
 import os
+import sqlite3
+import time
+from functools import reduce
+from sqlite3 import OperationalError
 
 import arbExcel
 import familie
@@ -15,11 +18,14 @@ from kivy.uix.widget import Widget
 from kivymd.app import MDApp
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.textfield import MDTextField
+from plyer import storagepath
+
+global conn
 
 Builder.load_string('''
 #:import datetime datetime
 #:import familie familie
-
+#:import utils utils
 <Page>:
     sm: sm
     BoxLayout:
@@ -51,8 +57,7 @@ Builder.load_string('''
                 on_release: 
                     app.nextScreen(-1)
             MDLabel:
-                text: "Menu" if sm.current == "Menu" else \
-                    (datetime.date.today() + datetime.timedelta(days=int(sm.current))).strftime("%a, %d.%m.%y")
+                text: "Menu" if sm.current == "Menu" else utils.datum(sm.current)
                 size_hint: 3/8,1
                 halign: 'center'
             MDRaisedButton:
@@ -329,7 +334,8 @@ class TextField(MDTextField):
         super().__init__(**kwargs)
         self.write_tab = False
 
-    gründe = ["Urlaub", "Krank", "Feiertag", "Üst-Abbau", "Fortbildung", "Supervision", "Dienstbesprechung", "Sonstiges"]
+    gründe = ["Urlaub", "Krank", "Feiertag", "Üst-Abbau", "Fortbildung", "Supervision", "Dienstbesprechung",
+              "Sonstiges"]
 
     def normalize(self):
         t = self.text.strip()
@@ -357,9 +363,27 @@ class TextField(MDTextField):
 
 class ArbeitsBlatt(MDApp):
     tage = {}
-    conn = ObjectProperty()
+
+    # conn = ObjectProperty()
 
     def build(self):
+        if os.name == "posix":
+            perms = ["android.permission.READ_EXTERNAL_STORAGE",
+                     "android.permission.WRITE_EXTERNAL_STORAGE"]
+            haveperms = acquire_permissions(perms)
+        dataDir = utils.getDataDir()
+        os.makedirs(dataDir, exist_ok=True)
+        db = dataDir + "/arbeitsblatt.db"
+
+        print("db path", db)
+        xconn = sqlite3.connect(db)
+        familie.conn = xconn
+        arbExcel.conn = xconn
+        app.conn = xconn
+        global conn
+        conn = xconn
+        initDB(xconn)
+
         self.menu = Menu(name="Menu")
         self.root = Page()
         self.root.sm.add_widget(self.menu)
@@ -412,7 +436,7 @@ class ArbeitsBlatt(MDApp):
         while self.mon.month == mon:
             d += 1
             self.mon = datetime.date.today() - datetime.timedelta(days=d)
-        mon = self.mon.strftime("%B %Y")
+        mon = utils.monYYYY(self.mon)
         dia = MDDialog(size_hint=(.8, .4), title="Monatsauswahl", text="Arbeitsblatt senden vom " + mon + "?",
                        text_button_cancel="Nein", text_button_ok="Ja", events_callback=self.evcb)
         dia.open()
@@ -424,22 +448,25 @@ class ArbeitsBlatt(MDApp):
             if mon == self.mon:
                 return
             self.mon = mon
-            mon = mon.strftime("%B %Y")
+            mon = utils.monYYYY(self.mon)
             dia = MDDialog(size_hint=(.8, .4), title="Monatsauswahl", text="Arbeitsblatt senden vom " + mon + "?",
                            text_button_cancel="Nein", text_button_ok="Ja", events_callback=self.evcb)
             dia.open()
         else:
-            mon = self.mon.strftime("%m.%y")
-            # print("Senden:", mon)
-            excel = arbExcel.ArbExcel(mon, self)
-            excel.sende()
-            if os.name == 'nt':
-                pass
-            else:
-                print("osname", os.name)
+            dataDir = utils.getDataDir()
+            excel = arbExcel.ArbExcel(utils.monYY(self.mon), dataDir, self)
+            excelFile = excel.makeExcel()
+            if os.name == "posix":
+                import android_email
+                mail = android_email.AndroidEmail()
+                mon = utils.monYYYY(self.mon)
+                mail.send(recipient=app.menu.ids.emailadresse.text, subject="Arbeitsblatt vom " + mon,
+                          text="Anbei das Arbeitsblatt von " + app.menu.ids.vorname.text + " " +
+                               app.menu.ids.nachname.text + " vom " + mon + ".",
+                          attachment=excelFile)
 
 
-def initDB():
+def initDB(conn):
     c = conn.cursor()
     try:
         with conn:
@@ -471,12 +498,103 @@ def initDB():
         pass
 
 
+def acquire_permissions(permissions, timeout=30):
+    from plyer.platforms.android import activity
+
+    def allgranted(permissions):
+        for perm in permissions:
+            r = activity.checkCurrentPermission(perm)
+            if r == 0:
+                return False
+        return True
+
+    haveperms = allgranted(permissions)
+    if haveperms:
+        # we have the permission and are ready
+        return True
+
+    # invoke the permissions dialog
+    activity.requestPermissions(permissions)
+
+    # now poll for the permission (UGLY but we cant use android Activity's onRequestPermissionsResult)
+    t0 = time.time()
+    while time.time() - t0 < timeout and not haveperms:
+        # in the poll loop we could add a short sleep for performance issues?
+        haveperms = allgranted(permissions)
+        time.sleep(1)
+
+    return haveperms
+
+
 if __name__ == '__main__':
-    locale.setlocale(locale.LC_TIME, "German")
-    conn = sqlite3.connect("arbeitsblatt.db")
-    familie.conn = conn
-    arbExcel.conn = conn
+    try:
+        # this seems to have no effect on android for strftime...
+        locale.setlocale(locale.LC_ALL, "")
+    except Exception as e:
+        utils.printEx("setlocale", e)
     app = ArbeitsBlatt()
-    app.conn = conn
-    initDB()
     app.run()
+
+
+    """
+    try:
+        print("home", storagepath.get_home_dir())  # /data
+    except:
+        pass
+    try:
+        print("extstor", storagepath.get_external_storage_dir())  # /storage/emulated/0
+    except:
+        pass
+    try:
+        print("sdcard", storagepath.get_sdcard_dir())  # None
+    except:
+        pass
+    try:
+        print("root", storagepath.get_root_dir())  # /system
+    except:
+        pass
+    try:
+        print("docs", storagepath.get_documents_dir())  # /storage/emulated/0/Documents
+    except:
+        pass
+    try:
+        print("down", storagepath.get_downloads_dir())  # /storage/emulated/0/Download
+    except:
+        pass
+    try:
+        print("app", storagepath.get_application_dir())  # /data/user/0
+    except:
+        pass
+    print("cwd", os.getcwd())  # /data/data/org.fpflege.arbeitsblatt/files/app
+    print("env", os.environ)
+
+    {    'PATH': '/sbin:/system/sbin:/system/bin:/system/xbin:/vendor/bin:/vendor/xbin',
+         'DOWNLOAD_CACHE': '/data/cache', 
+         'ANDROID_BOOTLOGO': '1', 
+         'ANDROID_ROOT': '/system',
+         'ANDROID_ASSETS': '/system/app', 
+         'ANDROID_DATA': '/data', 
+         'ANDROID_STORAGE': '/storage',
+         'EXTERNAL_STORAGE': '/sdcard', 
+         'ASEC_MOUNTPOINT': '/mnt/asec',
+         'BOOTCLASSPATH': '/system/framework/core-oj.jar:/system/framework/core-libart.jar:/system/framework/conscrypt.jar:/system/framework/okhttp.jar:/system/framework/bouncycastle.jar:/system/framework/apache-xml.jar:/system/framework/legacy-test.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/org.apache.http.legacy.boot.jar:/system/framework/android.hidl.base-V1.0-java.jar:/system/framework/android.hidl.manager-V1.0-java.jar',
+         'SYSTEMSERVERCLASSPATH': '/system/framework/services.jar:/system/framework/ethernet-service.jar:/system/framework/wifi-service.jar:/system/framework/com.android.location.provider.jar',
+         'ANDROID_SOCKET_zygote_secondary': '9', 
+         'ANDROID_ENTRYPOINT': 'main.pyc',
+         'ANDROID_ARGUMENT': '/data/user/0/org.fpflege.arbeitsblatt/files/app',
+         'ANDROID_APP_PATH': '/data/user/0/org.fpflege.arbeitsblatt/files/app',
+         'ANDROID_PRIVATE': '/data/user/0/org.fpflege.arbeitsblatt/files',
+         'ANDROID_UNPACK': '/data/user/0/org.fpflege.arbeitsblatt/files/app',
+         'PYTHONHOME': '/data/user/0/org.fpflege.arbeitsblatt/files/app',
+         'PYTHONPATH': '/data/user/0/org.fpflege.arbeitsblatt/files/app:/data/user/0/org.fpflege.arbeitsblatt/files/app/lib',
+         'PYTHONOPTIMIZE': '2', 
+         'P4A_BOOTSTRAP': 'SDL2', 
+         'PYTHON_NAME': 'python', 
+         'P4A_IS_WINDOWED': 'True',
+         'P4A_ORIENTATION': 'portrait', 
+         'P4A_NUMERIC_VERSION': 'None', 
+         'P4A_MINSDK': '21', 
+         'LC_CTYPE': 'C.UTF-8'
+    }
+    """
+

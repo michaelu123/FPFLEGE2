@@ -1,6 +1,7 @@
 import datetime
 
 # Termine, bei denen die Arbeitszeit und SollZeit 0 ist
+import os
 import sys
 import traceback
 
@@ -8,6 +9,17 @@ nichtArb = ["urlaub", "krank", "feiertag", "üst-abbau"]
 # einige Termine, von denen wir annehmen, daß sie sich nicht am nächsten Tag wiederholen:
 skipES = ["krank", "feiertag", "üst-abbau", "fortbildung", "supervision", "dienstbesprechung"]
 wday2No = {"Mo": 0, "Di": 1, "Mi": 2, "Do": 3, "Fr": 4, "Sa": 5, "So": 6}
+
+# cannot get german weekdays on Android...
+translate = {"Mo": "Mo", "Di": "Di", "Mi": "Mi", "Do": "Do", "Fr": "Fr", "Sa": "Sa", "So": "So",
+             "Mon": "Mo", "Tue": "Di", "Wed": "Mi", "Thu": "Do", "Fri": "Fr", "Sat": "Sa", "Sun": "So",
+             "Januar": "Januar", "Februar": "Februar", "März": "März", "April": "April",
+             "Mai": "Mai", "Juni": "Juni", "Juli": "Juli", "August": "August",
+             "September": "September", "Oktober": "Oktober", "November": "November", "Dezember": "Dezember",
+             "January": "Januar", "February": "Februar", "March": "März", "April": "April",
+             "May": "Mai", "June": "Juni", "July": "Juli", "August": "August",
+             "September": "September", "October": "Oktober", "November": "November", "December": "Dezember"
+             }
 
 
 def stdBeg(_tag, _wtag2Stunden):
@@ -38,7 +50,13 @@ def num2Tag(d):
 def num2WT(d):
     if isinstance(d, str):
         d = int(d)
-    return (datetime.date.today() + datetime.timedelta(days=d)).strftime("%a")
+    wt = (datetime.date.today() + datetime.timedelta(days=d)).strftime("%a")
+    wt = translate[wt]
+    return wt
+
+
+def datum(d):
+    return num2WT(d) + ", " + num2Tag(d)
 
 
 def tag2Nummer(tag):  # tag = 01.01.20, today = 03.01.20 ->  tnr=-2
@@ -51,8 +69,17 @@ def tag2Nummer(tag):  # tag = 01.01.20, today = 03.01.20 ->  tnr=-2
 
 def day2WT(tag):  # d = 24.12.19
     day = datetime.date(2000 + int(tag[6:8]), int(tag[3:5]), int(tag[0:2]))
-    wday = day.strftime("%a")
-    return wday
+    wt = day.strftime("%a")
+    wt = translate[wt]
+    return wt
+
+
+def monYYYY(mon):
+    return translate[mon.strftime("%B")] + mon.strftime(" %Y")
+
+
+def monYY(mon):
+    return mon.strftime("%m.%y")
 
 
 def t2m(t):
@@ -96,7 +123,7 @@ def tsubPause(t1, t2):
     while m3 < 0:
         h3 -= 1
         m3 += 60
-    if h3 > 6 or h3 == 6 and m3 > 0: # h3:m3 > 06:00
+    if h3 > 6 or h3 == 6 and m3 > 0:  # h3:m3 > 06:00
         m3 -= 30
         while m3 < 0:
             h3 -= 1
@@ -112,6 +139,7 @@ def hadd(sumh, row):
     except:
         sumh[es] = t
 
+
 def dadd(sumd, es):
     try:
         sumd[es] = sumd[es] + 1
@@ -120,13 +148,16 @@ def dadd(sumd, es):
 
 
 def elimEmpty(tuples, x):
-    res = []
-    for t in tuples:
-        if t[x] != "":
-            res.append(t)
-    return res
+    return [t for t in tuples if t[x] != ""]
 
 
 def printEx(msg, e):
     print(msg, e)
     traceback.print_exc(file=sys.stdout)
+
+
+def getDataDir():
+    if os.name == "posix":
+        # Context.getExternalFilesDir()
+        return "/storage/emulated/0/Android/data/org.fpflege.arbeitsblatt/files"
+    return "."

@@ -24,18 +24,19 @@ Sentinel = 16
 
 
 class ArbExcel:
-    def __init__(self, month, app):
+    def __init__(self, month, dataDir, app):
         self.month = month
+        self.dataDir = dataDir
         self.app = app
         self.tag = None
         pass
 
-    def sende(self):
+    def makeExcel(self):
         rows = self.checkComplete()
         if rows is None:
             return
-        self.writeExcel(rows)
-        pass
+        excelFile = self.writeExcel(rows)
+        return excelFile
 
     def checkComplete(self):
         rows = []
@@ -143,8 +144,8 @@ class ArbExcel:
                 if ctag != "":
                     self.makeRow(er, dsum, nsum, uesum, sollStunden)
                     ws.append(er)
-                    if tag == "99":
-                        break
+                if tag == "99":
+                    break
                 er = ["" for _ in range(Sentinel)]
                 wday = utils.day2WT(tag)
                 sollStunden = self.app.menu.wtag2Stunden[utils.wday2No[wday]]
@@ -203,5 +204,6 @@ class ArbExcel:
         ws.append(("Sollstunden", self.kumSoll))
         ws.append(("Überstunden", self.kumUeber))
 
-        wb.save("arbeitsblatt." + self.month + ".xlsx")
-        pass
+        fn = self.dataDir + "/arbeitsblatt." + self.month + ".xlsx"
+        wb.save(fn)
+        return fn
