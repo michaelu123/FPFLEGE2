@@ -57,7 +57,7 @@ Builder.load_string('''
                 on_release: 
                     app.nextScreen(-1)
             MDLabel:
-                text: "Menu" if sm.current == "Menu" else utils.datum(sm.current)
+                text: "Eigenschaften" if sm.current == "Menu" else utils.datum(sm.current)
                 size_hint: 3/8,1
                 halign: 'center'
             MDRaisedButton:
@@ -430,6 +430,13 @@ class ArbeitsBlatt(MDApp):
             self.gotoScreen(t, True)
 
     def senden(self):
+        if app.menu.ids.emailadresse.text == "" or app.menu.ids.vorname.text == "" or \
+                app.menu.ids.nachname.text == "" or app.menu.ids.wochenstunden.text == "":
+            dia = MDDialog(size_hint=(.8, .4), title="Eigenschaften", text="Bitte Eigenschaften vollständig ausfüllen",
+                           text_button_ok="OK")
+            dia.open()
+            return
+
         self.mon = datetime.date.today()
         mon = self.mon.month
         d = 0
