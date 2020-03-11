@@ -1,6 +1,9 @@
+from decimal import Decimal
+
 import openpyxl
 import utils
 from kivymd.uix.dialog import MDDialog
+from openpyxl.utils.datetime import CALENDAR_MAC_1904
 
 global conn
 
@@ -29,6 +32,9 @@ class ArbExcel:
         self.dataDir = dataDir
         self.app = app
         self.tag = None
+        self.kumArb = "00:00"
+        self.kumSoll = "00:00"
+        self.kumUeber = "00:00"
         pass
 
     def makeExcel(self):
@@ -48,7 +54,7 @@ class ArbExcel:
                           ("__." + self.month,))
                 while True:
                     r = c.fetchmany(100)
-                    r = utils.elimEmpty(r,2)
+                    r = utils.elimEmpty(r, 2)
                     if len(r) == 0:
                         break
                     rows.extend(r)
@@ -75,7 +81,7 @@ class ArbExcel:
                 wday = utils.day2WT(self.tag)
                 dayMiss = True
             lastTnr = tnr
-            if dayMiss or  (row[2] == "" or row[3] == "" or row[4] == ""):
+            if dayMiss or (row[2] == "" or row[3] == "" or row[4] == ""):
                 dia = MDDialog(size_hint=(.8, .4), title="Daten unvollständig",
                                text="Bitte Daten von " + wday + ", " + self.tag + " vervollständigen",
                                text_button_ok="OK", events_callback=self.evcb)
@@ -90,15 +96,14 @@ class ArbExcel:
         self.app.gotoScreen(tnr, False)
 
     def makeRow(self, er, dsum, nsum, uesum, sollstunden):
-        er[Arbeitsstunden] = dsum
+        er[Arbeitsstunden] = utils.hhmm2td(dsum)
+        ueberstunden = "00:00"
         if dsum == "00:00" and nsum == "00:00" and uesum == "00:00":
             # nicht möglich
-            ueberstunden = "00:00"
             sollstunden = "00:00"
         elif dsum == "00:00" and nsum == "00:00" and uesum != "00:00":
             ueberstunden = "-" + sollstunden
         elif dsum == "00:00" and nsum != "00:00" and uesum == "00:00":
-            ueberstunden = "00:00"
             sollstunden = "00:00"
         elif dsum == "00:00" and nsum != "00:00" and uesum != "00:00":
             ueberstunden = "-" + uesum
@@ -108,20 +113,21 @@ class ArbExcel:
         elif dsum != "00:00" and nsum == "00:00" and uesum != "00:00":
             ueberstunden = utils.tsub(dsum, sollstunden)
         elif dsum != "00:00" and nsum != "00:00" and uesum == "00:00":
-            ueberstunden = "00:00"
             sollstunden = utils.tsub(sollstunden, nsum)
         elif dsum != "00:00" and nsum != "00:00" and uesum != "00:00":
             sollstunden = utils.tsub(sollstunden, nsum)
             ueberstunden = utils.tsub(dsum, sollstunden)
 
-        er[Ueberstunden] = ueberstunden
-        er[Sollstunden] = sollstunden
+        er[Ueberstunden] = utils.hhmm2td(ueberstunden)
+        er[Sollstunden] = utils.hhmm2td(sollstunden)
+        self.kumArb = utils.tadd(self.kumArb, dsum)
         self.kumSoll = utils.tadd(self.kumSoll, sollstunden)
         self.kumUeber = utils.tadd(self.kumUeber, ueberstunden)
-        er[Kumuliert] = self.kumUeber
+        er[Kumuliert] = utils.hhmm2td(self.kumUeber)
 
     def writeExcel(self, rows):
         wb = openpyxl.Workbook()
+        wb.epoch = CALENDAR_MAC_1904  # this enables negative timedeltas
         ws = wb.active
         ws.title = self.month
         ws.append(
@@ -133,10 +139,10 @@ class ArbExcel:
         sumd = {"Fahrtzeit": 0}
         dsum = "00:00"
         nsum = "00:00"
-        self.kumSoll = "00:00"
-        self.kumUeber = "00:00"
         fsum = "00:00"
+        uesum = "00:00"
         sollStunden = "00:00"
+        mvvSumme = Decimal("0.00")
         rows.append(["99"])
         for row in rows:
             tag = row[0]
@@ -144,6 +150,10 @@ class ArbExcel:
                 if ctag != "":
                     self.makeRow(er, dsum, nsum, uesum, sollStunden)
                     ws.append(er)
+                    mr = ws.max_row
+                    for col in [Arbeitsstunden, Sollstunden, Ueberstunden, Kumuliert]:
+                        ws.cell(row=mr, column=col+1).number_format = "[hh]:mm"
+                    ws.cell(row=mr, column=6).number_format = "#,##0.00€"
                 if tag == "99":
                     break
                 er = ["" for _ in range(Sentinel)]
@@ -162,8 +172,10 @@ class ArbExcel:
                 er[Einsatzstelle1] = es
                 er[Beginn1] = beginn
                 er[Ende1] = ende
-                er[Fahrt] = row[5]
-                er[MVVEuro] = row[6]
+                if row[5] != "":
+                    er[Fahrt] = float(row[5].replace(",", "."))
+                if row[6] != "":
+                    er[MVVEuro] = float(row[6].replace(",", "."))
                 if row[5] != "":
                     fsum = utils.tadd(fsum, "00:30")
                     dsum = utils.tadd(dsum, "00:30")
@@ -187,22 +199,51 @@ class ArbExcel:
                 nsum = utils.tadd(nsum, dauer)
             else:
                 dsum = utils.tadd(dsum, dauer)
+            if row[6] != "":
+                mvvSumme = mvvSumme + Decimal(row[6].replace(",", "."))
+
+        mr = ws.max_row
+        mrs = str(mr)
+        ws.append([])
+        ws.append(["Formeln:", "", "", "", "", "=SUM(F2:F"+mrs+")", "", "", "", "", "", "",
+                   "=SUM(M2:M" + mrs + ")","=SUM(N2:N"+mrs+")", "=SUM(O2:O"+mrs+")"])
+        mr = ws.max_row
+        for col in [Arbeitsstunden, Sollstunden, Ueberstunden, Kumuliert]:
+            ws.cell(row=mr, column=col + 1).number_format = "[hh]:mm"
+        ws.cell(row=mr, column=6).number_format = "#,##0.00€"
+
+        # mvvSumme = utils.moneyfmt(mvvSumme, sep='.', dp=',')
+        mvvSumme = utils.moneyfmt(mvvSumme, sep='', dp='.')
+        mvvSumme = float(mvvSumme)
+        ws.append(["Summen:", "", "", "", "", mvvSumme, "", "", "", "", "", "",
+                   utils.hhmm2td(self.kumArb), utils.hhmm2td(self.kumSoll), utils.hhmm2td(self.kumUeber)])
+        mr = ws.max_row
+        for col in [Arbeitsstunden, Sollstunden, Ueberstunden, Kumuliert]:
+            ws.cell(row=mr, column=col + 1).number_format = "[hh]:mm"
+        ws.cell(row=mr, column=6).number_format = "#,##0.00€"
 
         ws.append([])
-        ws.append([])
-        tsum = "00:00"
         ws.append(["Einsatzstelle", "Tage", "Stunden"])
         sumh["Fahrtzeit"] = fsum
+        tsum = "00:00"
         for es in sorted(sumh.keys()):
             if es == "Üst-Abbau":
                 continue
-            ws.append((es, str(sumd[es]), sumh[es]))
+            ws.append((es, sumd[es], utils.hhmm2td(sumh[es])))
+            mr = ws.max_row
+            ws.cell(row=mr, column=3).number_format = "[hh]:mm"
             if es.lower() not in utils.nichtArb:
                 tsum = utils.tadd(tsum, sumh[es])
         ws.append([])
-        ws.append(("Arbeitsstunden", tsum))
-        ws.append(("Sollstunden", self.kumSoll))
-        ws.append(("Überstunden", self.kumUeber))
+        ws.append(("Arbeitsstunden", utils.hhmm2td(tsum)))
+        mr = ws.max_row
+        ws.cell(row=mr, column=2).number_format = "[hh]:mm"
+        ws.append(("Sollstunden", utils.hhmm2td(self.kumSoll)))
+        mr = ws.max_row
+        ws.cell(row=mr, column=2).number_format = "[hh]:mm"
+        ws.append(("Überstunden", utils.hhmm2td(self.kumUeber)))
+        mr = ws.max_row
+        ws.cell(row=mr, column=2).number_format = "[hh]:mm"
 
         fn = self.dataDir + "/arbeitsblatt." + self.month + ".xlsx"
         wb.save(fn)

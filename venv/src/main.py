@@ -4,6 +4,7 @@ import locale
 import os
 import sqlite3
 import time
+from decimal import Decimal, getcontext
 from functools import reduce
 from sqlite3 import OperationalError
 
@@ -21,6 +22,9 @@ from kivymd.uix.textfield import MDTextField
 from plyer import storagepath
 
 global conn
+
+decCtx = getcontext()
+decCtx.prec = 7  # 5.2 digits, max=99999.99
 
 Builder.load_string('''
 #:import datetime datetime
@@ -354,7 +358,14 @@ class TextField(MDTextField):
                 self.text = ""
                 return
         elif self.hint_text.find("MVV-Euro") >= 0:
-            pass
+            try:
+                d = Decimal(t.replace(",", "."))
+                if int(d.compare(Decimal("5"))) < 0 or int(d.compare(Decimal(15))) > 0:
+                    self.text = ""
+                else:
+                    self.text = utils.moneyfmt(d, sep='.', dp=',')
+            except:
+                self.text = ""
         elif self.hint_text.find("Wochenstunden") >= 0:
             if t != "20" and t != "30" and t != "35" and t != "38,5":
                 t = ""

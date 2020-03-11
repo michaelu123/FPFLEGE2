@@ -1,10 +1,10 @@
 import datetime
-
-# Termine, bei denen die Arbeitszeit und SollZeit 0 ist
 import os
 import sys
 import traceback
+from decimal import Decimal
 
+# Termine, bei denen Arbeitszeit und Sollzeit 0 sind
 nichtArb = ["urlaub", "krank", "feiertag", "üst-abbau"]
 # einige Termine, von denen wir annehmen, daß sie sich nicht am nächsten Tag wiederholen:
 skipES = ["krank", "feiertag", "üst-abbau", "fortbildung", "supervision", "dienstbesprechung"]
@@ -16,9 +16,9 @@ translate = {"Mo": "Mo", "Di": "Di", "Mi": "Mi", "Do": "Do", "Fr": "Fr", "Sa": "
              "Januar": "Januar", "Februar": "Februar", "März": "März", "April": "April",
              "Mai": "Mai", "Juni": "Juni", "Juli": "Juli", "August": "August",
              "September": "September", "Oktober": "Oktober", "November": "November", "Dezember": "Dezember",
-             "January": "Januar", "February": "Februar", "March": "März", "April": "April",
-             "May": "Mai", "June": "Juni", "July": "Juli", "August": "August",
-             "September": "September", "October": "Oktober", "November": "November", "December": "Dezember"
+             "January": "Januar", "February": "Februar", "March": "März",
+             "May": "Mai", "June": "Juni", "July": "Juli",
+             "October": "Oktober", "December": "Dezember"
              }
 
 
@@ -147,6 +147,15 @@ def dadd(sumd, es):
         sumd[es] = 1
 
 
+def hhmm2td(t):
+    try:
+        col = t.find(':')
+        return datetime.timedelta(hours=int(t[0:col]), minutes=int(t[col+1:]))
+    except Exception as e:
+        print("cannot convert " + t + " to timedelta")
+        raise e
+
+
 def elimEmpty(tuples, x):
     return [t for t in tuples if t[x] != ""]
 
@@ -161,3 +170,54 @@ def getDataDir():
         # Context.getExternalFilesDir()
         return "/storage/emulated/0/Android/data/org.fpflege.arbeitsblatt/files"
     return "."
+
+def moneyfmt(value, places=2, curr='', sep=',', dp='.',
+             pos='', neg='-', trailneg=''):
+    """Convert Decimal to a money formatted string.
+
+    places:  required number of places after the decimal point
+    curr:    optional currency symbol before the sign (may be blank)
+    sep:     optional grouping separator (comma, period, space, or blank)
+    dp:      decimal point indicator (comma or period)
+             only specify as blank when places is zero
+    pos:     optional sign for positive numbers: '+', space or blank
+    neg:     optional sign for negative numbers: '-', '(', space or blank
+    trailneg:optional trailing minus indicator:  '-', ')', space or blank
+
+    >>> d = Decimal('-1234567.8901')
+    >>> moneyfmt(d, curr='$')
+    '-$1,234,567.89'
+    >>> moneyfmt(d, places=0, sep='.', dp='', neg='', trailneg='-')
+    '1.234.568-'
+    >>> moneyfmt(d, curr='$', neg='(', trailneg=')')
+    '($1,234,567.89)'
+    >>> moneyfmt(Decimal(123456789), sep=' ')
+    '123 456 789.00'
+    >>> moneyfmt(Decimal('-0.02'), neg='<', trailneg='>')
+    '<0.02>'
+
+    """
+    q = Decimal(10) ** -places      # 2 places --> '0.01'
+    sign, digits, exp = value.quantize(q).as_tuple()
+    result = []
+    digits = list(map(str, digits))
+    build, next = result.append, digits.pop
+    if sign:
+        build(trailneg)
+    for i in range(places):
+        build(next() if digits else '0')
+    if places:
+        build(dp)
+    if not digits:
+        build('0')
+    i = 0
+    while digits:
+        build(next())
+        i += 1
+        if i == 3 and digits:
+            i = 0
+            build(sep)
+    build(curr)
+    build(neg if sign else pos)
+    return ''.join(reversed(result))
+
