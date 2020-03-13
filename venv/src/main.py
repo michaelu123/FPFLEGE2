@@ -41,7 +41,8 @@ Builder.load_string('''
             md_bg_color: app.theme_cls.primary_color
             background_palette: 'Primary'
             elevation: 10
-            left_action_items: [['menu', app.showMenu]]
+            left_action_items: [['account', app.showMenu]]
+            right_action_items: [['email', app.senden],['delete', app.clear]]
         BoxLayout:
             orientation: "horizontal"
             size_hint_y: 0.1
@@ -91,13 +92,27 @@ Builder.load_string('''
     spacing: 1
     id: fam
     padding: '12dp'
-    TextField:
-        id: einsatzstelle
-        name: "einsatzstelle"
-        hint_text: str(fam.fnr) + ". Einsatzstelle/Pfl.-Nr./Urlaub/Krank/Feiertag/Üst-Abbau/Fortbildung/Supervision/Dienstbesprechung/Sonstiges"
-        helper_text: "Pfl.-Nr. oder Name"
-        helper_text_mode: "on_focus"
-        on_focus: if not self.focus: fam.famEvent(self)
+    BoxLayout:
+        TextField:
+            id: einsatzstelle
+            name: "einsatzstelle"
+            hint_text: str(fam.fnr) + ". Name/Ur/Kr/Fe/Üs/Fo/Su/Di/So"
+            helper_text: "Pfl.-Nr. oder Name, Urlaub, Krank,..."
+            helper_text_mode: "on_focus"
+            on_focus: if not self.focus: fam.famEvent(self)
+        MDLabel:
+            text: "KH:"
+            theme_text_color: 'Hint'
+            size_hint: None, None
+            halign: 'left'
+            size: dp(20), dp(48)
+            font_size: 12
+        MDCheckbox:
+            id: kh
+            halign: 'left'
+            size_hint: None, None
+            size: dp(40), dp(48)
+            on_state: fam.cbEvent(self)
     BoxLayout:
         spacing: 30
         TimeField:
@@ -124,6 +139,7 @@ Builder.load_string('''
             helper_text_mode: "on_focus"
             padding: '12dp'
             on_focus: if not self.focus: fam.famEvent(self)
+            disabled: fam.fnr == 3
         TextField:
             id: mvv_euro
             name: "mvv_euro"
@@ -132,6 +148,7 @@ Builder.load_string('''
             helper_text_mode: "on_focus"
             padding: '12dp'
             on_focus: if not self.focus: fam.famEvent(self)
+            disabled: fam.fnr == 2 or fam.fnr == 3
             
 <Tag>:
     on_kv_post: self.init()
@@ -177,12 +194,6 @@ Builder.load_string('''
             name: "emailadresse"
             hint_text: "Email-Adresse"
             on_focus: if not self.focus: menu.menuEvent(self)
-        MDRaisedButton:
-            id: senden
-            text: "Senden"
-            on_release: 
-                app.senden()
-            
 ''')
 
 
@@ -232,6 +243,18 @@ class Menu(Screen):
     def __del__(self):
         print("Menu del")
 
+    def setWtagStunden(self, wochenstunden):
+        if wochenstunden == "20":
+            self.wtag2Stunden = ("04:00", "04:00", "04:00", "04:00", "04:00", "00:00", "00:00")
+        elif wochenstunden == "30":
+            self.wtag2Stunden = ("06:00", "06:00", "06:00", "06:00", "06:00", "00:00", "00:00")
+        elif wochenstunden == "35":
+            self.wtag2Stunden = ("07:00", "07:00", "07:00", "07:00", "07:00", "00:00", "00:00")
+        elif wochenstunden == "38,5":
+            self.wtag2Stunden = ("08:00", "08:00", "08:00", "08:00", "06:30", "00:00", "00:00")
+        else:
+            self.wtag2Stunden = ("", "", "", "", "", "", "")
+
     def init(self):
         try:
             with conn:
@@ -248,18 +271,9 @@ class Menu(Screen):
                 self.ids.vorname.text = vals[0]
                 self.ids.nachname.text = vals[1]
                 wochenstunden = vals[2]
+                self.setWtagStunden(wochenstunden)
                 self.ids.wochenstunden.text = vals[2]
                 self.ids.emailadresse.text = vals[3]
-                if wochenstunden == "20":
-                    self.wtag2Stunden = ("04:00", "04:00", "04:00", "04:00", "04:00", "00:00", "00:00")
-                elif wochenstunden == "30":
-                    self.wtag2Stunden = ("06:00", "06:00", "06:00", "06:00", "06:00", "00:00", "00:00")
-                elif wochenstunden == "35":
-                    self.wtag2Stunden = ("07:00", "07:00", "07:00", "07:00", "07:00", "00:00", "00:00")
-                elif wochenstunden == "38,5":
-                    self.wtag2Stunden = ("08:00", "08:00", "08:00", "08:00", "06:30", "00:00", "00:00")
-                else:
-                    self.wtag2Stunden = ("", "", "", "", "", "", "")
         except Exception as e:
             utils.printEx("main0:", e)
 
@@ -276,6 +290,8 @@ class Menu(Screen):
                         "INSERT INTO eigenschaften VALUES(:vorname,:nachname,:wochenstunden,:emailadresse)", vals)
         except Exception as e:
             utils.printEx("main1:", e)
+        if x.name == "wochenstunden":
+            self.setWtagStunden(x.text)
 
 
 class TimeField(MDTextField):
@@ -343,7 +359,7 @@ class TextField(MDTextField):
 
     def normalize(self):
         t = self.text.strip()
-        if self.hint_text.find("Einsatz") > 0:
+        if self.name == "einsatzstelle":
             lc = t.lower()
             lcLen = len(lc)
             if lcLen >= 2:
@@ -351,13 +367,13 @@ class TextField(MDTextField):
                     if lcLen <= len(grund) and lc == grund[0:lcLen].lower():
                         self.text = grund
                         break
-            if self.parent.fnr == 1:  # and t.lower() in utils.extras:
-                self.parent.fillinStdBegEnd(app.menu.wtag2Stunden)
-        elif self.hint_text.find("Fahrtzeit") >= 0:
+            if self.parent.parent.fnr == 1:  # and t.lower() in utils.extras:
+                self.parent.parent.fillinStdBegEnd(app.menu.wtag2Stunden)
+        elif self.name == "fahrtzeit":
             if t != "" and t != "0,5":
                 self.text = ""
                 return
-        elif self.hint_text.find("MVV-Euro") >= 0:
+        elif self.name == "mvv_euro":
             try:
                 d = Decimal(t.replace(",", "."))
                 if int(d.compare(Decimal("5"))) < 0 or int(d.compare(Decimal(15))) > 0:
@@ -366,7 +382,7 @@ class TextField(MDTextField):
                     self.text = utils.moneyfmt(d, sep='.', dp=',')
             except:
                 self.text = ""
-        elif self.hint_text.find("Wochenstunden") >= 0:
+        elif self.name == "wochenstunden":
             if t != "20" and t != "30" and t != "35" and t != "38,5":
                 t = ""
             self.text = t
@@ -406,6 +422,16 @@ class ArbeitsBlatt(MDApp):
         self.root.sm.current = "Menu"
         self.root.sm.transition = SlideTransition()
 
+    def clear(self, _):
+        cur = self.root.sm.current
+        try:
+            t = self.tage[cur]
+        except: #  clicked delete on menu page
+            return
+        for fam in [ "fam1", "fam2", "fam3"]:
+            t.ids[fam].clear()
+        pass
+
     def gotoScreen(self, t, rel):
         sm = self.root.sm
         if rel:
@@ -440,7 +466,7 @@ class ArbeitsBlatt(MDApp):
             sm.transition.direction = 'left'
             self.gotoScreen(t, True)
 
-    def senden(self):
+    def senden(self, _):
         if app.menu.ids.emailadresse.text == "" or app.menu.ids.vorname.text == "" or \
                 app.menu.ids.nachname.text == "" or app.menu.ids.wochenstunden.text == "":
             dia = MDDialog(size_hint=(.8, .4), title="Eigenschaften", text="Bitte Eigenschaften vollständig ausfüllen",
@@ -495,7 +521,8 @@ def initDB(conn):
             beginn TEXT,
             ende TEXT,
             fahrtzeit TEXT,
-            mvv_euro TEXT)
+            mvv_euro TEXT,
+            kh INTEGER)
             """)
     except OperationalError:
         pass
