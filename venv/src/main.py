@@ -19,7 +19,8 @@ from kivy.uix.widget import Widget
 from kivymd.app import MDApp
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.textfield import MDTextField
-from plyer import storagepath
+from kivymd.toast import toast
+#from plyer import storagepath
 
 global conn
 
@@ -37,7 +38,7 @@ Builder.load_string('''
         orientation: "vertical"
         MDToolbar:
             id: toolbar
-            title: "Arbeitsbogen"
+            title: "Arbeitsblatt"
             md_bg_color: app.theme_cls.primary_color
             background_palette: 'Primary'
             elevation: 10
@@ -106,13 +107,13 @@ Builder.load_string('''
             size_hint: None, None
             halign: 'left'
             size: dp(20), dp(48)
-            font_size: 12
+            font_size: '10sp'
         MDCheckbox:
             id: kh
             halign: 'left'
             size_hint: None, None
             size: dp(40), dp(48)
-            on_state: fam.cbEvent(self)
+            on_state: fam.checkBoxEvent(self)
     BoxLayout:
         spacing: 30
         TimeField:
@@ -202,9 +203,6 @@ class Page(Widget):
     t = 0
     ev = None
 
-    def __del__(self):
-        print("Page del")
-
     def on_touch_move(self, touch):
         # print("touch", touch)
         self.t = touch.x - touch.ox
@@ -214,7 +212,7 @@ class Page(Widget):
 
     def moveCB(self, _):
         self.ev.cancel()
-        self.ev = None
+        #self.ev = None
         # print("moveCB", self.t)
         if self.t < -100:
             app.nextScreen(1)
@@ -223,9 +221,6 @@ class Page(Widget):
 
 
 class Tag(Screen):
-    def __del__(self):
-        print("Tag del")
-
     def init(self):
         if self.ids.fam1.ids.einsatzstelle.text != "":
             return
@@ -240,9 +235,6 @@ class Tag(Screen):
 
 
 class Menu(Screen):
-    def __del__(self):
-        print("Menu del")
-
     def setWtagStunden(self, wochenstunden):
         if wochenstunden == "20":
             self.wtag2Stunden = ("04:00", "04:00", "04:00", "04:00", "04:00", "00:00", "00:00")
@@ -295,9 +287,6 @@ class Menu(Screen):
 
 
 class TimeField(MDTextField):
-    def __del__(self):
-        print("Tim del")
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.write_tab = False
@@ -342,14 +331,21 @@ class TimeField(MDTextField):
         if len(t) != 5 or t[2] != ":" or \
                 not "0" <= t[0] <= "9" or not "0" <= t[1] <= "9" or not "0" <= t[3] <= "9" or not "0" <= t[4] <= "9" \
                 or int(t[0:2]) > 23 or int(t[3:5]) > 59:
+            toast("Uhrzeit hh:mm")
+            t = ""
+        try:
+            hh = int(t[0:2])
+            mm = int(t[3:5])
+            if hh > 23 or mm > 59:
+                toast("00:00-23:59")
+                t = ""
+        except:
+            toast("00:00-23:59")
             t = ""
         self.text = t
 
 
 class TextField(MDTextField):
-    def __del__(self):
-        print("Tex del")
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.write_tab = False
@@ -371,19 +367,23 @@ class TextField(MDTextField):
                 self.parent.parent.fillinStdBegEnd(app.menu.wtag2Stunden)
         elif self.name == "fahrtzeit":
             if t != "" and t != "0,5":
+                toast("Fahrtzeit 0,5 oder nichts")
                 self.text = ""
                 return
         elif self.name == "mvv_euro":
             try:
                 d = Decimal(t.replace(",", "."))
                 if int(d.compare(Decimal("5"))) < 0 or int(d.compare(Decimal(15))) > 0:
+                    toast("MVV Kosten von 5 bis 15 €")
                     self.text = ""
                 else:
                     self.text = utils.moneyfmt(d, sep='.', dp=',')
             except:
+                toast("MVV Kosten von 5 bis 15 €")
                 self.text = ""
         elif self.name == "wochenstunden":
             if t != "20" and t != "30" and t != "35" and t != "38,5":
+                toast("Wochenstunden: 20, 30, 35, 38,5)")
                 t = ""
             self.text = t
 
@@ -472,6 +472,7 @@ class ArbeitsBlatt(MDApp):
             dia = MDDialog(size_hint=(.8, .4), title="Eigenschaften", text="Bitte Eigenschaften vollständig ausfüllen",
                            text_button_ok="OK")
             dia.open()
+            self.root.sm.current = "Menu"
             return
 
         self.mon = datetime.date.today()

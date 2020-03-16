@@ -59,6 +59,18 @@ class ArbExcel:
         excelFile = self.writeExcel(rows)
         return excelFile
 
+    def checkRow(self, row):
+        beginn = row[R_Beginn]
+        ende = row[R_Ende]
+        dauer = utils.tsub(ende, beginn)
+        if dauer[0] == '-':
+            return "Ende vor Beginn"
+        if dauer == "00:00":
+            return "Beginn gleich Ende"
+        if int(dauer[0:2]) >= 12:
+            return "Beginn bis Ende mehr als 12 Stunden"
+        return None
+
     def checkComplete(self):
         rows = []
         try:
@@ -106,6 +118,13 @@ class ArbExcel:
             if dayMiss or fnrMiss or (row[R_Einsatzstelle] == "" or row[R_Beginn] == "" or row[R_Ende] == ""):
                 dia = MDDialog(size_hint=(.8, .4), title="Daten unvollständig",
                                text="Bitte Daten von " + wday + ", " + self.tag + " vervollständigen",
+                               text_button_ok="OK", events_callback=self.evcb)
+                dia.open()
+                return None
+            text = self.checkRow(row)
+            if text != None:
+                dia = MDDialog(size_hint=(.8, .4), title="Daten falsch",
+                               text = text + ", bitte Daten von " + wday + ", " + self.tag + " ausbessern",
                                text_button_ok="OK", events_callback=self.evcb)
                 dia.open()
                 return None

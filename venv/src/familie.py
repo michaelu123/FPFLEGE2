@@ -29,11 +29,11 @@ class Familie(BoxLayout):
         except Exception as e:
             utils.printEx("fam0:", e)
 
-    def cbEvent(self, x):
+    def checkBoxEvent(self, x):
         fnr = self.fnr
         tag = self.parent.parent.name
         tag = utils.num2Tag(tag)
-        # print("cbEvent state", x.state, "active", x.active, "Famnr", fnr, "Tag", tag)
+        # print("checkBoxEvent state", x.state, "active", x.active, "Famnr", fnr, "Tag", tag)
         try:
             with conn:
                 c = conn.cursor()
