@@ -150,7 +150,12 @@ def dadd(sumd, es):
 def hhmm2td(t):
     try:
         col = t.find(':')
-        return datetime.timedelta(hours=int(t[0:col]), minutes=int(t[col+1:]))
+        h = int(t[0:col])
+        m = int(t[col+1:])
+        if t[0] == '-':
+            return datetime.timedelta(0) - datetime.timedelta(hours=-h, minutes=m)
+        else:
+            return datetime.timedelta(hours=int(t[0:col]), minutes=int(t[col+1:]))
     except Exception as e:
         print("cannot convert " + t + " to timedelta")
         raise e

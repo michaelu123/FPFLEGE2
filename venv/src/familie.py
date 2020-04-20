@@ -11,7 +11,7 @@ class Familie(BoxLayout):
 
     def famEvent(self, x):
         fnr = self.fnr
-        tag = self.parent.parent.name
+        tag = self.tag.name
         tag = utils.num2Tag(tag)
         # print("famEvent", x.text, "Feld", x.name, "Famnr", fnr, "Tag", tag)
         x.normalize()
@@ -31,7 +31,7 @@ class Familie(BoxLayout):
 
     def checkBoxEvent(self, x):
         fnr = self.fnr
-        tag = self.parent.parent.name
+        tag = self.tag.name
         tag = utils.num2Tag(tag)
         # print("checkBoxEvent state", x.state, "active", x.active, "Famnr", fnr, "Tag", tag)
         try:
@@ -51,7 +51,7 @@ class Familie(BoxLayout):
         # print("fam", self)
         # print("famids", self.ids)
         fnr = self.fnr
-        tag = self.parent.parent.name
+        tag = self.tag.name
         print("tag", tag, "fam" + str(fnr), "einss", self.ids.einsatzstelle.text, "beg", self.ids.beginn.text, "end",
               self.ids.ende.text, "kh", self.ids.kh.state)
 
@@ -151,7 +151,7 @@ class Familie(BoxLayout):
     def fillinStdBegEnd(self, wtag2Stunden):
         if self.ids.beginn.text != "" or self.ids.ende.text != "":
             return
-        tag = self.parent.parent.name
+        tag = self.tag.name
         tag = utils.num2Tag(tag)
         self.ids.beginn.text = utils.stdBeg(tag, wtag2Stunden)
         self.famEvent(self.ids.beginn)
@@ -167,7 +167,7 @@ class Familie(BoxLayout):
         self.ids.mvv_euro.text = ""
         self.ids.kh.active = 0
 
-        tag = self.parent.parent.name
+        tag = self.tag.name
         tag = utils.num2Tag(tag)
         try:
             with conn:

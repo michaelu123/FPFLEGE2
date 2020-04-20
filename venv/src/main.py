@@ -77,11 +77,6 @@ Builder.load_string('''
                 on_release: 
                     app.nextScreen(7)
         ScreenManager:
-            canvas.before:
-                Color: 
-                    rgba: (1,0,0,0)
-                Rectangle:
-                    size: self.size
             pos: self.pos
             size_hint_y: 0.9
             id: sm
@@ -96,6 +91,7 @@ Builder.load_string('''
     BoxLayout:
         TextField:
             id: einsatzstelle
+            fam: fam
             name: "einsatzstelle"
             hint_text: str(fam.fnr) + ". Name/Ur/Kr/Fe/Üs/Fo/Su/Di/So"
             helper_text: "Pfl.-Nr. oder Name, Urlaub, Krank,..."
@@ -152,19 +148,27 @@ Builder.load_string('''
             disabled: fam.fnr == 2 or fam.fnr == 3
             
 <Tag>:
+    id: tag
     on_kv_post: self.init()
-    BoxLayout:
-        orientation: 'vertical'
-        spacing: 20
-        Familie:
-            id: fam1
-            fnr: 1
-        Familie:
-            id: fam2
-            fnr: 2
-        Familie:
-            id: fam3
-            fnr: 3
+    ScrollView:
+        BoxLayout:
+            size_hint_y: None
+            height: dp(600)
+            orientation: 'vertical'
+            spacing: 20
+            Familie:
+                id: fam1
+                tag: tag
+                fnr: 1
+            Familie:
+                id: fam2
+                tag: tag
+                fnr: 2
+            Familie:
+                id: fam3
+                tag: tag
+                fnr: 3
+            MDLabel:
             
 <Menu>:
     on_kv_post: self.init()
@@ -213,10 +217,10 @@ class Page(Widget):
     def moveCB(self, _):
         self.ev.cancel()
         #self.ev = None
-        # print("moveCB", self.t)
-        if self.t < -100:
+        #print("moveCB", self.t)
+        if self.t < -600:
             app.nextScreen(1)
-        elif self.t > 100:
+        elif self.t > 600:
             app.nextScreen(-1)
 
 
@@ -363,8 +367,8 @@ class TextField(MDTextField):
                     if lcLen <= len(grund) and lc == grund[0:lcLen].lower():
                         self.text = grund
                         break
-            if self.parent.parent.fnr == 1:  # and t.lower() in utils.extras:
-                self.parent.parent.fillinStdBegEnd(app.menu.wtag2Stunden)
+            if self.fam.fnr == 1:  # and t.lower() in utils.extras:
+                self.fam.fillinStdBegEnd(app.menu.wtag2Stunden)
         elif self.name == "fahrtzeit":
             if t != "" and t != "0,5":
                 toast("Fahrtzeit 0,5 oder nichts")
