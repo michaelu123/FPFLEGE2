@@ -31,7 +31,7 @@ def stdEnd(tag, wtag2Stunden):
     if stunden == "04:00":
         return "12:00"
     if stunden == "06:00":
-        return "14:30"
+        return "14:00"
     if stunden == "06:30":
         return "15:00"
     if stunden == "07:00":
