@@ -38,7 +38,8 @@ Arbeitsstunden = 16
 Sollstunden = 17
 Ueberstunden = 18
 Kumuliert = 19
-Sentinel = 20
+KumFormel = 20
+Sentinel = 21
 
 
 class ArbExcel:
@@ -136,7 +137,7 @@ class ArbExcel:
         tnr = utils.tag2Nummer(self.tag)
         self.app.gotoScreen(tnr, False)
 
-    def makeRow(self, er, dsum, nsum, uesum, sollstunden):
+    def makeRow(self, er, dsum, nsum, uesum, sollstunden, rownr):
         er[Arbeitsstunden] = utils.hhmm2td(dsum)
         ueberstunden = "00:00"
         if dsum == "00:00" and nsum == "00:00" and uesum == "00:00":
@@ -165,6 +166,10 @@ class ArbExcel:
         self.kumSoll = utils.tadd(self.kumSoll, sollstunden)
         self.kumUeber = utils.tadd(self.kumUeber, ueberstunden)
         er[Kumuliert] = utils.hhmm2td(self.kumUeber)
+        if rownr == 0:
+            er[KumFormel] = "=S" + str(rownr+2)
+        else:
+            er[KumFormel] = "=S" + str(rownr+2) + "+U" + str(rownr+1)
 
     def writeExcel(self, rows):
         wb = openpyxl.Workbook()
@@ -175,7 +180,7 @@ class ArbExcel:
             ["Tag", "1.Einsatzstelle", "Beginn", "Ende", "KH", "Fahrt", "MVV",
              "2.Einsatzstelle", "Beginn", "Ende", "KH", "Fahrt",
              "3.Einsatzstelle", "Beginn", "Ende", "KH",
-             "Arbeitsstunden", "Sollstunden", "Überstunden", "Kumuliert"])
+             "Arbeitsstunden", "Sollstunden", "Überstunden", "Kumuliert", "KumFormel"])
         ctag = ""
         er = None
         sumh = {}
@@ -187,14 +192,14 @@ class ArbExcel:
         sollStunden = "00:00"
         mvvSumme = Decimal("0.00")
         rows.append(["99"])
-        for row in rows:
+        for rownr, row in enumerate(rows):
             tag = row[R_Tag]
             if tag != ctag:
                 if ctag != "":
-                    self.makeRow(er, dsum, nsum, uesum, sollStunden)
+                    self.makeRow(er, dsum, nsum, uesum, sollStunden, rownr)
                     ws.append(er)
                     mr = ws.max_row
-                    for col in [Arbeitsstunden, Sollstunden, Ueberstunden, Kumuliert]:
+                    for col in [Arbeitsstunden, Sollstunden, Ueberstunden, Kumuliert, KumFormel]:
                         ws.cell(row=mr, column=col + 1).number_format = "[hh]:mm"
                     ws.cell(row=mr, column=MVVEuro + 1).number_format = "#,##0.00€"
                 if tag == "99":
@@ -302,10 +307,10 @@ class ArbExcel:
         #     dim.bestFit = True
         #     dim.customWidth = False
         col_widths = {Tag: 12,
-                      Einsatzstelle1: 20, Beginn1: 7, Ende1: 7, Kh1: 3, Fahrt1: 5, MVVEuro: 7,
+                      Einsatzstelle1: 20, Beginn1: 7, Ende1: 7, Kh1: 3, Fahrt1: 5, MVVEuro: 8,
                       Einsatzstelle2: 20, Beginn2: 7, Ende2: 7, Kh2: 3, Fahrt2: 5,
                       Einsatzstelle3: 20, Beginn3: 7, Ende3: 7, Kh3: 3,
-                      Arbeitsstunden: 7, Sollstunden: 7, Ueberstunden: 7, Kumuliert: 7}
+                      Arbeitsstunden: 7, Sollstunden: 7, Ueberstunden: 7, Kumuliert: 7, KumFormel: 7}
         for k in col_widths.keys():
             ws.column_dimensions[chr(ord("A") + k)].width = col_widths[k]
 
