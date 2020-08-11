@@ -59,7 +59,7 @@ class Familie(BoxLayout):
         t = int(t)
         tag = utils.num2Tag(t)
         wt = utils.num2WT(t)
-        if wt == "Sa" or wt == "So":
+        if self.app.dokorrektur or wt == "Sa" or wt == "So":
             return (tag, 1, "", "", "", "", "", 0)
         try:
             with conn:

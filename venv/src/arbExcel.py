@@ -1,8 +1,10 @@
+import datetime
 from decimal import Decimal
 
 import openpyxl
 import utils
 from kivymd.uix.dialog import MDDialog
+from kivymd.uix.list import OneLineListItem
 from openpyxl.utils.datetime import CALENDAR_MAC_1904
 
 global conn
@@ -123,9 +125,9 @@ class ArbExcel:
                 dia.open()
                 return None
             text = self.checkRow(row)
-            if text != None:
+            if text is not None:
                 dia = MDDialog(size_hint=(.8, .4), title="Daten falsch",
-                               text = text + ", bitte Daten von " + wday + ", " + self.tag + " ausbessern",
+                               text=text + ", bitte Daten von " + wday + ", " + self.tag + " ausbessern",
                                text_button_ok="OK", events_callback=self.evcb)
                 dia.open()
                 return None
@@ -167,9 +169,9 @@ class ArbExcel:
         self.kumUeber = utils.tadd(self.kumUeber, ueberstunden)
         er[Kumuliert] = utils.hhmm2td(self.kumUeber)
         if rownr == 0:
-            er[KumFormel] = "=S" + str(rownr+2)
+            er[KumFormel] = "=S" + str(rownr + 2)
         else:
-            er[KumFormel] = "=S" + str(rownr+2) + "+U" + str(rownr+1)
+            er[KumFormel] = "=S" + str(rownr + 2) + "+U" + str(rownr + 1)
 
     def writeExcel(self, rows):
         wb = openpyxl.Workbook()
@@ -318,3 +320,94 @@ class ArbExcel:
              self.app.menu.ids.nachname.text + ".xlsx"
         wb.save(fn)
         return fn
+
+    def readExcel(self, path):
+        'C:\\Users\\Michael\\PycharmProjects\\FPFLEGE2\\venv\\src\\arbeitsblatt.02.20_M_U.xlsx'
+        self.path = path
+        self.wb = openpyxl.load_workbook(filename=path)
+        sheetnames = self.wb.get_sheet_names()
+        self.dialog = MDDialog(
+            title="Wähle Blatt aus",
+            type="simple",
+            items=[SelectItem(self, t) for t in sheetnames],
+        )
+        self.dialog.open()
+
+    def readExcel2(self, sheetname):
+        self.dialog.dismiss()
+        ws = self.wb.get_sheet_by_name(sheetname)
+        for row in ws.rows:
+            if len(row) == 0:
+                continue
+            self.row2db(row)
+
+    def row2db(self, row):
+        tag = row[Tag].value
+        if tag is None or len(tag) != 12:
+            return
+        tag = tag[4:]  # Mi, 01.07.20 -> 01.07.20
+        if len(tag.split(".")) != 3:
+            return
+
+        if self.xval(row[Einsatzstelle1]) is not None:
+            try:
+                with conn:
+                    c = conn.cursor()
+                    vals = {"tag": tag, "fnr": 1, "einsatzstelle": row[Einsatzstelle1].value,
+                            "beginn": self.xval(row[Beginn1]), "ende": self.xval(row[Ende1]),
+                            "fahrtzeit": self.xval(row[Fahrt1]), "mvv_euro": self.xval(row[MVVEuro]),
+                            "kh": self.kh(row[Kh1])}
+                    c.execute(
+                        "INSERT INTO arbeitsblatt VALUES(:tag,:fnr,:einsatzstelle,:beginn,:ende,:fahrtzeit,:mvv_euro,:kh)",
+                        vals)
+            except Exception as e:
+                utils.printEx("fam0:", e)
+
+        if self.xval(row[Einsatzstelle2]) is not None:
+            try:
+                with conn:
+                    c = conn.cursor()
+                    vals = {"tag": tag, "fnr": 2, "einsatzstelle": row[Einsatzstelle2].value,
+                            "beginn": self.xval(row[Beginn2]), "ende": self.xval(row[Ende2]),
+                            "fahrtzeit": self.xval(row[Fahrt2]), "mvv_euro": "", "kh": self.kh(row[Kh2])}
+                    c.execute(
+                        "INSERT INTO arbeitsblatt VALUES(:tag,:fnr,:einsatzstelle,:beginn,:ende,:fahrtzeit,:mvv_euro,:kh)",
+                        vals)
+            except Exception as e:
+                utils.printEx("fam2:", e)
+
+        if self.xval(row[Einsatzstelle3]) is not None:
+            try:
+                with conn:
+                    c = conn.cursor()
+                    vals = {"tag": tag, "fnr": 3, "einsatzstelle": row[Einsatzstelle3].value,
+                            "beginn": self.xval(row[Beginn3]), "ende": self.xval(row[Ende3]),
+                            "fahrtzeit": "", "mvv_euro": "", "kh": self.kh(row[Kh1])}
+                    c.execute(
+                        "INSERT INTO arbeitsblatt VALUES(:tag,:fnr,:einsatzstelle,:beginn,:ende,:fahrtzeit,:mvv_euro,:kh)",
+                        vals)
+            except Exception as e:
+                utils.printEx("fam3:", e)
+
+    def kh(self, c):
+        if c.value is None:
+            return None
+        if c.value == "Ja":
+            return 1
+        return 0
+
+    def xval(self, c):
+        if c.value is None:
+            return None
+        if isinstance(c.value, datetime.time):
+            return str(c.value)[0:5]
+        return str(c.value)
+
+
+class SelectItem(OneLineListItem):
+    def __init__(self, arbExcel, text):
+        super().__init__(text=text)
+        self.arbExcel = arbExcel
+
+    def on_press(self, *args):
+        self.arbExcel.readExcel2(self.text)

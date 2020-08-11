@@ -1,11 +1,9 @@
 import datetime
-import functools
 import locale
 import os
 import sqlite3
 import time
 from decimal import Decimal, getcontext
-from functools import reduce
 from sqlite3 import OperationalError
 
 import arbExcel
@@ -17,10 +15,11 @@ from kivy.properties import ObjectProperty
 from kivy.uix.screenmanager import Screen, NoTransition, SlideTransition
 from kivy.uix.widget import Widget
 from kivymd.app import MDApp
+from kivymd.toast import toast
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.textfield import MDTextField
-from kivymd.toast import toast
-#from plyer import storagepath
+# from plyer import storagepath
+from plyer import filechooser
 
 global conn
 
@@ -28,6 +27,7 @@ decCtx = getcontext()
 decCtx.prec = 7  # 5.2 digits, max=99999.99
 
 Builder.load_string('''
+#:import os os
 #:import datetime datetime
 #:import familie familie
 #:import utils utils
@@ -43,7 +43,7 @@ Builder.load_string('''
             background_palette: 'Primary'
             elevation: 10
             left_action_items: [['account', app.showMenu]]
-            right_action_items: [['email', app.senden],['delete', app.clear]]
+            right_action_items: [['email', app.senden], ['delete', app.clear]] if not app.dokorrektur else [["file-excel", app.korrektur], ['email', app.senden], ['delete', app.clear]]
         BoxLayout:
             orientation: "horizontal"
             size_hint_y: 0.1
@@ -216,8 +216,8 @@ class Page(Widget):
 
     def moveCB(self, _):
         self.ev.cancel()
-        #self.ev = None
-        #print("moveCB", self.t)
+        # self.ev = None
+        # print("moveCB", self.t)
         if self.t < -600:
             app.nextScreen(1)
         elif self.t > 600:
@@ -394,6 +394,7 @@ class TextField(MDTextField):
 
 class ArbeitsBlatt(MDApp):
     tage = {}
+    dokorrektur = os.environ.get("KORREKTUR") is not None
 
     # conn = ObjectProperty()
 
@@ -419,6 +420,7 @@ class ArbeitsBlatt(MDApp):
         self.root = Page()
         self.root.sm.add_widget(self.menu)
         self.tage["0"] = self.root.sm.current_screen
+        self.path = "C:/"
         return self.root
 
     def showMenu(self, _):
@@ -430,9 +432,9 @@ class ArbeitsBlatt(MDApp):
         cur = self.root.sm.current
         try:
             t = self.tage[cur]
-        except: #  clicked delete on menu page
+        except:  # clicked delete on menu page
             return
-        for fam in [ "fam1", "fam2", "fam3"]:
+        for fam in ["fam1", "fam2", "fam3"]:
             t.ids[fam].clear()
         pass
 
@@ -514,6 +516,26 @@ class ArbeitsBlatt(MDApp):
                                app.menu.ids.nachname.text + " vom " + mon + ".",
                           attachment=excelFile)
 
+    def korrektur(self, *args):
+        try:
+            with conn:
+                c = conn.cursor()
+                c.execute("delete from arbeitsblatt")
+        except OperationalError:
+            pass
+
+        cwd = os.getcwd()
+        path = filechooser.open_file(title="Bitte ein Arbeitsblatt auswählen", path=self.path, multiple=False,
+                                     filters=[["Excel", "*.xlsx"]], preview=False)
+        if not path:
+            return
+
+        path = path[0]
+        self.path = os.path.dirname(path)
+        dataDir = utils.getDataDir()
+        excel = arbExcel.ArbExcel(0, dataDir, self)
+        excelFile = excel.readExcel(path)
+
 
 def initDB(conn):
     c = conn.cursor()
@@ -585,7 +607,6 @@ if __name__ == '__main__':
     app = ArbeitsBlatt()
     app.run()
 
-
     """
     try:
         print("home", storagepath.get_home_dir())  # /data
@@ -647,4 +668,3 @@ if __name__ == '__main__':
          'LC_CTYPE': 'C.UTF-8'
     }
     """
-
