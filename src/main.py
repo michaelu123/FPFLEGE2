@@ -2,13 +2,11 @@ import datetime
 import locale
 import os
 import sqlite3
+import sys
 import time
 from decimal import Decimal, getcontext
 from sqlite3 import OperationalError
 
-import arbExcel
-import familie
-import utils
 from kivy.clock import Clock
 from kivy.lang import Builder
 from kivy.properties import ObjectProperty
@@ -20,6 +18,10 @@ from kivymd.uix.dialog import MDDialog
 from kivymd.uix.textfield import MDTextField
 # from plyer import storagepath
 from plyer import filechooser
+
+import arbExcel
+import familie
+import utils
 
 global conn
 
@@ -394,7 +396,7 @@ class TextField(MDTextField):
 
 class ArbeitsBlatt(MDApp):
     tage = {}
-    dokorrektur = os.environ.get("KORREKTUR") is not None
+    dokorrektur = os.environ.get("KORREKTUR") is not None or hasattr(sys, "_MEIPASS")  # i.e. if running as exe produced by pyinstaller
 
     # conn = ObjectProperty()
 
@@ -420,7 +422,7 @@ class ArbeitsBlatt(MDApp):
         self.root = Page()
         self.root.sm.add_widget(self.menu)
         self.tage["0"] = self.root.sm.current_screen
-        self.path = "C:/"
+        self.path = None
         return self.root
 
     def showMenu(self, _):
@@ -530,20 +532,20 @@ class ArbeitsBlatt(MDApp):
         except OperationalError:
             pass
 
-        cwd = os.getcwd()
-        path = filechooser.open_file(title="Bitte ein Arbeitsblatt auswählen", path=self.path, multiple=False,
-                                     filters=[["Excel", "*.xlsx"]], preview=False)
-        if not path:
-            return
-
-        path = path[0]
-        self.path = os.path.dirname(path)
+        if self.path is None:
+            path = filechooser.open_file(title="Bitte ein Arbeitsblatt auswählen", path="C:/", multiple=False,
+                                         filters=[["Excel", "*.xlsx"]], preview=False)
+            if not path:
+                return
+            self.path = path[0]
         dataDir = utils.getDataDir()
         self.korrExcel = arbExcel.ArbExcel("00.00", dataDir, self)
-        self.korrExcel.readExcel(path)
+        self.korrExcel.readExcel(self.path)
 
     def writeKorrektur(self, *args):
-        self.korrExcel.makeExcel()
+        if hasattr(self, "korrExcel"):
+            self.korrExcel.makeExcel()
+        toast("Erst Tabelle öffnen!")
 
 
 def initDB(conn):

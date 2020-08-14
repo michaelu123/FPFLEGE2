@@ -170,10 +170,7 @@ class ArbExcel:
         self.kumSoll = utils.tadd(self.kumSoll, sollstunden)
         self.kumUeber = utils.tadd(self.kumUeber, ueberstunden)
         er[Kumuliert] = utils.hhmm2td(self.kumUeber)
-        if exrownr == 1:
-            er[KumFormel] = "=S" + str(exrownr + 1)
-        else:
-            er[KumFormel] = "=S" + str(exrownr + 1) + "+U" + str(exrownr)
+        er[KumFormel] = "=S" + str(exrownr + 1) + "+U" + str(exrownr)
 
     def writeExcel(self, rows):
         if self.wb is None:
@@ -191,7 +188,12 @@ class ArbExcel:
              "2.Einsatzstelle", "Beginn", "Ende", "KH", "Fahrt",
              "3.Einsatzstelle", "Beginn", "Ende", "KH",
              "Arbeitsstunden", "Sollstunden", "Überstunden", "Kumuliert", "KumFormel"])
-        exrownr = 1
+        ws.append(
+            ["", "Übertrag", "", "", "", "", "",
+             "", "", "", "", "",
+             "", "", "", "",
+             "", "", 0, "=S2", "=S2"])
+        exrownr = 2
         ctag = ""
         er = None
         sumh = {}
