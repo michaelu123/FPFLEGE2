@@ -9,6 +9,7 @@ nichtArb = ["urlaub", "krank", "feiertag", "üst-abbau"]
 # einige Termine, von denen wir annehmen, daß sie sich nicht am nächsten Tag wiederholen:
 skipES = ["krank", "feiertag", "üst-abbau", "fortbildung", "supervision", "dienstbesprechung"]
 wday2No = {"Mo": 0, "Di": 1, "Mi": 2, "Do": 3, "Fr": 4, "Sa": 5, "So": 6}
+firstDay = None
 
 # cannot get german weekdays on Android...
 translate = {"Mo": "Mo", "Di": "Di", "Mi": "Mi", "Do": "Do", "Fr": "Fr", "Sa": "Sa", "So": "So",
@@ -40,17 +41,21 @@ def stdEnd(tag, wtag2Stunden):
         return "16:30"
     return ""
 
+def origin():
+    if firstDay is not None:
+        return firstDay;
+    return datetime.date.today()
 
 def num2Tag(d):
     if isinstance(d, str):
         d = int(d)
-    return (datetime.date.today() + datetime.timedelta(days=d)).strftime("%d.%m.%y")
+    return (origin() + datetime.timedelta(days=d)).strftime("%d.%m.%y")
 
 
 def num2WT(d):
     if isinstance(d, str):
         d = int(d)
-    wt = (datetime.date.today() + datetime.timedelta(days=d)).strftime("%a")
+    wt = (origin() + datetime.timedelta(days=d)).strftime("%a")
     wt = translate[wt]
     return wt
 
@@ -60,8 +65,8 @@ def datum(d):
 
 
 def tag2Nummer(tag):  # tag = 01.01.20, today = 03.01.20 ->  tnr=-2
-    for i in range(5, -70, -1):
-        t = (datetime.date.today() + datetime.timedelta(days=i)).strftime("%d.%m.%y")
+    for i in (range(5, -70, -1) if firstDay is None else range(0, 31, 1)):
+        t = (origin() + datetime.timedelta(days=i)).strftime("%d.%m.%y")
         if t == tag:
             return i
     raise ValueError("Kann Tagesnummer für Tag " + tag + " nicht berechnen")
@@ -113,7 +118,9 @@ def tsub(t1, t2):
         m = -m
     else:
         sign = ""
-    return sign + '{:02d}:{:02d}'.format(int(m / 60), int(m % 60))
+    res = sign + '{:02d}:{:02d}'.format(int(m / 60), int(m % 60))
+    # print("tsub", t1, t2, res)
+    return res
 
 
 def tsubPause(t1, t2):
@@ -128,8 +135,9 @@ def tsubPause(t1, t2):
         while m3 < 0:
             h3 -= 1
             m3 += 60
-    return '{:02d}:{:02d}'.format(h3, m3)
-
+    res = '{:02d}:{:02d}'.format(h3, m3)
+    # print("tsubPause", t1, t2, res)
+    return res
 
 def hadd(sumh, row):
     es = row[2]
@@ -152,10 +160,15 @@ def hhmm2td(t):
         col = t.find(':')
         h = int(t[0:col])
         m = int(t[col+1:])
-        if t[0] == '-':
-            return datetime.timedelta(0) - datetime.timedelta(hours=-h, minutes=m)
+        # if t[0] == '-':
+        #     return datetime.timedelta(0) - datetime.timedelta(hours=-h, minutes=m)
+        # else:
+        #     return datetime.timedelta(hours=int(t[0:col]), minutes=int(t[col+1:]))
+        mdec = m / 60.0
+        if h < 0:
+            return float(h) - mdec
         else:
-            return datetime.timedelta(hours=int(t[0:col]), minutes=int(t[col+1:]))
+            return float(h) + mdec
     except Exception as e:
         print("cannot convert " + t + " to timedelta")
         raise e

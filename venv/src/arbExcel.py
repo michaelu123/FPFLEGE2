@@ -43,6 +43,8 @@ Kumuliert = 19
 KumFormel = 20
 Sentinel = 21
 
+hourFormat = "#,##0.00" # "[hh]:mm" fails on negative times
+euroFormat = "#,##0.00€"
 
 class ArbExcel:
     def __init__(self, month, dataDir, app):
@@ -139,7 +141,7 @@ class ArbExcel:
         tnr = utils.tag2Nummer(self.tag)
         self.app.gotoScreen(tnr, False)
 
-    def makeRow(self, er, dsum, nsum, uesum, sollstunden, rownr):
+    def makeRow(self, er, dsum, nsum, uesum, sollstunden, exrownr):
         er[Arbeitsstunden] = utils.hhmm2td(dsum)
         ueberstunden = "00:00"
         if dsum == "00:00" and nsum == "00:00" and uesum == "00:00":
@@ -168,21 +170,28 @@ class ArbExcel:
         self.kumSoll = utils.tadd(self.kumSoll, sollstunden)
         self.kumUeber = utils.tadd(self.kumUeber, ueberstunden)
         er[Kumuliert] = utils.hhmm2td(self.kumUeber)
-        if rownr == 0:
-            er[KumFormel] = "=S" + str(rownr + 2)
+        if exrownr == 1:
+            er[KumFormel] = "=S" + str(exrownr + 1)
         else:
-            er[KumFormel] = "=S" + str(rownr + 2) + "+U" + str(rownr + 1)
+            er[KumFormel] = "=S" + str(exrownr + 1) + "+U" + str(exrownr)
 
     def writeExcel(self, rows):
-        wb = openpyxl.Workbook()
-        wb.epoch = CALENDAR_MAC_1904  # this enables negative timedeltas
-        ws = wb.active
-        ws.title = self.month
+        if self.wb is None:
+            wb = openpyxl.Workbook()
+            wb.epoch = CALENDAR_MAC_1904  # this enables negative timedeltas
+            ws = wb.active
+            ws.title = self.month
+        else:
+            wb = self.wb
+            sheetnames = self.wb.get_sheet_names()
+            index = sheetnames.index(self.ws.title)
+            ws = wb.create_sheet(self.ws.title + "_korr", index + 1)
         ws.append(
             ["Tag", "1.Einsatzstelle", "Beginn", "Ende", "KH", "Fahrt", "MVV",
              "2.Einsatzstelle", "Beginn", "Ende", "KH", "Fahrt",
              "3.Einsatzstelle", "Beginn", "Ende", "KH",
              "Arbeitsstunden", "Sollstunden", "Überstunden", "Kumuliert", "KumFormel"])
+        exrownr = 1
         ctag = ""
         er = None
         sumh = {}
@@ -193,17 +202,18 @@ class ArbExcel:
         uesum = "00:00"
         sollStunden = "00:00"
         mvvSumme = Decimal("0.00")
-        rows.append(["99"])
-        for rownr, row in enumerate(rows):
+        rows.append(("99",))
+        for row in rows:
             tag = row[R_Tag]
             if tag != ctag:
                 if ctag != "":
-                    self.makeRow(er, dsum, nsum, uesum, sollStunden, rownr)
+                    self.makeRow(er, dsum, nsum, uesum, sollStunden, exrownr)
                     ws.append(er)
+                    exrownr += 1
                     mr = ws.max_row
                     for col in [Arbeitsstunden, Sollstunden, Ueberstunden, Kumuliert, KumFormel]:
-                        ws.cell(row=mr, column=col + 1).number_format = "[hh]:mm"
-                    ws.cell(row=mr, column=MVVEuro + 1).number_format = "#,##0.00€"
+                        ws.cell(row=mr, column=col + 1).number_format = hourFormat
+                    ws.cell(row=mr, column=MVVEuro + 1).number_format = euroFormat
                 if tag == "99":
                     break
                 er = ["" for _ in range(Sentinel)]
@@ -267,8 +277,8 @@ class ArbExcel:
                    "=SUM(Q2:Q" + mrs + ")", "=SUM(R2:R" + mrs + ")", "=SUM(S2:S" + mrs + ")"])
         mr = ws.max_row
         for col in [Arbeitsstunden, Sollstunden, Ueberstunden, Kumuliert]:
-            ws.cell(row=mr, column=col + 1).number_format = "[hh]:mm"
-        ws.cell(row=mr, column=MVVEuro + 1).number_format = "#,##0.00€"
+            ws.cell(row=mr, column=col + 1).number_format = hourFormat
+        ws.cell(row=mr, column=MVVEuro + 1).number_format = euroFormat
 
         # mvvSumme = utils.moneyfmt(mvvSumme, sep='.', dp=',')
         mvvSumme = utils.moneyfmt(mvvSumme, sep='', dp='.')
@@ -277,8 +287,8 @@ class ArbExcel:
                    utils.hhmm2td(self.kumArb), utils.hhmm2td(self.kumSoll), utils.hhmm2td(self.kumUeber)])
         mr = ws.max_row
         for col in [Arbeitsstunden, Sollstunden, Ueberstunden, Kumuliert]:
-            ws.cell(row=mr, column=col + 1).number_format = "[hh]:mm"
-        ws.cell(row=mr, column=MVVEuro + 1).number_format = "#,##0.00€"
+            ws.cell(row=mr, column=col + 1).number_format = hourFormat
+        ws.cell(row=mr, column=MVVEuro + 1).number_format = euroFormat
 
         ws.append([])
         ws.append(["", "Einsatzstelle", "Tage", "Stunden"])
@@ -289,19 +299,19 @@ class ArbExcel:
                 continue
             ws.append(("", es, sumd[es], utils.hhmm2td(sumh[es])))
             mr = ws.max_row
-            ws.cell(row=mr, column=4).number_format = "[hh]:mm"
+            ws.cell(row=mr, column=4).number_format = hourFormat
             if es.lower() not in utils.nichtArb:
                 tsum = utils.tadd(tsum, sumh[es])
         ws.append([])
         ws.append(("", "Arbeitsstunden", utils.hhmm2td(tsum)))
         mr = ws.max_row
-        ws.cell(row=mr, column=3).number_format = "[hh]:mm"
+        ws.cell(row=mr, column=3).number_format = hourFormat
         ws.append(("", "Sollstunden", utils.hhmm2td(self.kumSoll)))
         mr = ws.max_row
-        ws.cell(row=mr, column=3).number_format = "[hh]:mm"
+        ws.cell(row=mr, column=3).number_format = hourFormat
         ws.append(("", "Überstunden", utils.hhmm2td(self.kumUeber)))
         mr = ws.max_row
-        ws.cell(row=mr, column=3).number_format = "[hh]:mm"
+        ws.cell(row=mr, column=3).number_format = hourFormat
 
         # https://bitbucket.org/openpyxl/openpyxl/issues/425/auto_size-not-working
         # for c in range(Sentinel):
@@ -316,30 +326,39 @@ class ArbExcel:
         for k in col_widths.keys():
             ws.column_dimensions[chr(ord("A") + k)].width = col_widths[k]
 
-        fn = self.dataDir + "/arbeitsblatt." + self.month + "_" + self.app.menu.ids.vorname.text + "_" + \
-             self.app.menu.ids.nachname.text + ".xlsx"
-        wb.save(fn)
-        return fn
+        if self.path is None:
+            fn = self.dataDir + "/arbeitsblatt." + self.month + "_" + self.app.menu.ids.vorname.text + "_" + \
+                 self.app.menu.ids.nachname.text + ".xlsx"
+            wb.save(fn)
+            return fn
+        else:
+            wb.save(self.path)
+            return None
 
     def readExcel(self, path):
-        'C:\\Users\\Michael\\PycharmProjects\\FPFLEGE2\\venv\\src\\arbeitsblatt.02.20_M_U.xlsx'
         self.path = path
         self.wb = openpyxl.load_workbook(filename=path)
+        self.wb.epoch = CALENDAR_MAC_1904  # this enables negative timedeltas
         sheetnames = self.wb.get_sheet_names()
         self.dialog = MDDialog(
             title="Wähle Blatt aus",
             type="simple",
             items=[SelectItem(self, t) for t in sheetnames],
         )
+        self.dialog.auto_dismiss = False
         self.dialog.open()
 
     def readExcel2(self, sheetname):
         self.dialog.dismiss()
-        ws = self.wb.get_sheet_by_name(sheetname)
-        for row in ws.rows:
+        print("sheetname", sheetname)
+        self.ws = self.wb.get_sheet_by_name(sheetname)
+        self.wochenStunden = "00"
+        for row in self.ws.rows:
             if len(row) == 0:
                 continue
             self.row2db(row)
+        self.app.nextScreen(1)
+        self.app.nextScreen(-1)
 
     def row2db(self, row):
         tag = row[Tag].value
@@ -349,7 +368,30 @@ class ArbExcel:
         if len(tag.split(".")) != 3:
             return
 
-        if self.xval(row[Einsatzstelle1]) is not None:
+        # infer month and first day of month (to become screen "0")
+        if self.month == "00.00":
+            self.month = tag[3:]  # 07.20
+            utils.firstDay = datetime.date(2000 + int(tag[6:8]), int(tag[3:5]), 1)
+        elif self.month != tag[3:]:
+            return
+
+        # infer wochenstunden from sollstunden
+        # see main.py, Menu, setWtagStunden
+        if self.wochenStunden == "00":
+            sollStunden = self.xval(row[Sollstunden])
+            if sollStunden == "04:00":
+                self.wochenStunden = "20"
+            elif sollStunden == "06:00":
+                self.wochenStunden = "30"
+            elif sollStunden == "07:00":
+                self.wochenStunden = "35"
+            elif sollStunden == "08:00" or sollStunden == "06:30":
+                self.wochenStunden = "38,5"
+
+            if self.wochenStunden != "00":
+                self.app.menu.setWtagStunden(self.wochenStunden)
+
+        if self.xval(row[Einsatzstelle1]) != "":
             try:
                 with conn:
                     c = conn.cursor()
@@ -363,7 +405,7 @@ class ArbExcel:
             except Exception as e:
                 utils.printEx("fam0:", e)
 
-        if self.xval(row[Einsatzstelle2]) is not None:
+        if self.xval(row[Einsatzstelle2]) != "":
             try:
                 with conn:
                     c = conn.cursor()
@@ -376,7 +418,7 @@ class ArbExcel:
             except Exception as e:
                 utils.printEx("fam2:", e)
 
-        if self.xval(row[Einsatzstelle3]) is not None:
+        if self.xval(row[Einsatzstelle3]) != "":
             try:
                 with conn:
                     c = conn.cursor()
@@ -391,14 +433,14 @@ class ArbExcel:
 
     def kh(self, c):
         if c.value is None:
-            return None
+            return 0
         if c.value == "Ja":
             return 1
         return 0
 
     def xval(self, c):
         if c.value is None:
-            return None
+            return ""
         if isinstance(c.value, datetime.time):
             return str(c.value)[0:5]
         return str(c.value)

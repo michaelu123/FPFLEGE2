@@ -43,7 +43,7 @@ Builder.load_string('''
             background_palette: 'Primary'
             elevation: 10
             left_action_items: [['account', app.showMenu]]
-            right_action_items: [['email', app.senden], ['delete', app.clear]] if not app.dokorrektur else [["file-excel", app.korrektur], ['email', app.senden], ['delete', app.clear]]
+            right_action_items: [['email', app.senden], ['delete', app.clear]] if not app.dokorrektur else [["file-excel", app.korrektur], ['table-edit', app.writeKorrektur], ['delete', app.clear]]
         BoxLayout:
             orientation: "horizontal"
             size_hint_y: 0.1
@@ -442,10 +442,16 @@ class ArbeitsBlatt(MDApp):
         sm = self.root.sm
         if rel:
             n = int(sm.current) + t
-            if n > 5:
-                n = 5
-            if n < -62:
-                n = -62
+            if self.dokorrektur:
+                if n > 30:
+                    n = 30
+                if n < 0:
+                    n = 0
+            else:
+                if n > 5:
+                    n = 5
+                if n < -62:
+                    n = -62
         else:
             n = t
         n = str(n)
@@ -533,8 +539,11 @@ class ArbeitsBlatt(MDApp):
         path = path[0]
         self.path = os.path.dirname(path)
         dataDir = utils.getDataDir()
-        excel = arbExcel.ArbExcel(0, dataDir, self)
-        excelFile = excel.readExcel(path)
+        self.korrExcel = arbExcel.ArbExcel("00.00", dataDir, self)
+        self.korrExcel.readExcel(path)
+
+    def writeKorrektur(self, *args):
+        self.korrExcel.makeExcel()
 
 
 def initDB(conn):
