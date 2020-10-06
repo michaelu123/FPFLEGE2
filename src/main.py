@@ -514,7 +514,7 @@ class ArbeitsBlatt(MDApp):
         else:
             dataDir = utils.getDataDir()
             excel = arbExcel.ArbExcel(utils.monYY(self.mon), dataDir, self)
-            excelFile = excel.makeExcel()
+            excelFile, title = excel.makeExcel()
             if os.name == "posix":
                 import android_email
                 mail = android_email.AndroidEmail()
@@ -544,8 +544,10 @@ class ArbeitsBlatt(MDApp):
 
     def writeKorrektur(self, *args):
         if hasattr(self, "korrExcel"):
-            self.korrExcel.makeExcel()
-        toast("Erst Tabelle öffnen!")
+            excelFile, title = self.korrExcel.makeExcel()
+            toast("Neues Tabellenblatt: " + title)
+        else:
+            toast("Erst Tabelle öffnen!")
 
 
 def initDB(conn):

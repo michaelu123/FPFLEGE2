@@ -61,8 +61,8 @@ class ArbExcel:
         rows = self.checkComplete()
         if rows is None:
             return
-        excelFile = self.writeExcel(rows)
-        return excelFile
+        excelFile, title = self.writeExcel(rows)
+        return (excelFile, title)
 
     def checkRow(self, row):
         beginn = row[R_Beginn]
@@ -182,7 +182,14 @@ class ArbExcel:
             wb = self.wb
             sheetnames = self.wb.get_sheet_names()
             index = sheetnames.index(self.ws.title)
-            ws = wb.create_sheet(self.ws.title + "_korr", index + 1)
+            x = self.ws.title.find("_korr")
+            if x > 0:
+                nr = self.ws.title[x+5:]
+                nr = 2 if nr == "" else int(nr) + 1
+                title = self.ws.title[0:x] + "_korr" + str(nr)
+            else:
+                title = self.ws.title + "_korr"
+            ws = wb.create_sheet(title, index + 1)
         ws.append(
             ["Tag", "1.Einsatzstelle", "Beginn", "Ende", "KH", "Fahrt", "MVV",
              "2.Einsatzstelle", "Beginn", "Ende", "KH", "Fahrt",
@@ -332,10 +339,10 @@ class ArbExcel:
             fn = self.dataDir + "/arbeitsblatt." + self.month + "_" + self.app.menu.ids.vorname.text + "_" + \
                  self.app.menu.ids.nachname.text + ".xlsx"
             wb.save(fn)
-            return fn
+            return (fn, ws.title)
         else:
             wb.save(self.path)
-            return None
+            return (self.path, ws.title)
 
     def readExcel(self, path):
         self.path = path
